@@ -865,7 +865,7 @@ image_window_t::image_window_t(QApplication * const app) :
 	normal_view_hbox=new QHBox(qhbox);
 	normal_view_hbox->setSpacing(10);
 
-	contrast_slider=new slider_t(normal_view_hbox,"Contrast",0.5,4,1.6,"%.2fx");
+	contrast_slider=new slider_t(normal_view_hbox,"Contrast",0.5,4,1.3,"%.2fx");
 	connect(contrast_slider->slider,SIGNAL(valueChanged(int)),
 									SLOT(color_and_levels_params_changed()));
 
