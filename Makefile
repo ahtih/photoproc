@@ -5,7 +5,7 @@
 # 2. Do "make relnotes" and update the ChangeLog file accordingly
 # 3. Do "make release"
 # 4. Upload the release files to Sourceforge
-# 5. Do "cvs tag -c cvs tag -c release-X-XX" to tag the CVS repository
+# 5. Do "cvs tag -c release-X-XX" to tag the CVS repository
 ###########################################################################
 
 MOC_CPP_SRCS = qt-main.cpp
