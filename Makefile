@@ -36,6 +36,7 @@ clean::
 	@rm -rf *.o *.so *.a *.moc $(PROG)
 
 RELEASE_FILES = $(MOC_CPP_SRCS) $(CPP_SRCS) $(HEADERS) Makefile LICENSE
+prefix ?= /usr
 
 release: VER = photoproc-$(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
 
