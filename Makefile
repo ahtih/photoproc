@@ -40,6 +40,8 @@ IMAGEMAGICK_LIBS_DIR ?= /usr/lib
 STATIC_QTDIR ?= $(QTDIR)
 
 STATIC_X11_LIBFILES= \
+		$(IMAGEMAGICK_LIBS_DIR)/libMagick++.a \
+		$(IMAGEMAGICK_LIBS_DIR)/libMagick.a \
 		/usr/X11R6/lib/libXft.a \
 		/usr/X11R6/lib/libXinerama.a \
 		/usr/X11R6/lib/libXrandr.a \
@@ -47,8 +49,6 @@ STATIC_X11_LIBFILES= \
 		/usr/X11R6/lib/libdpstk.a \
 		/usr/X11R6/lib/libdps.a
 STATIC_OTHER_LIBFILES= \
-		$(IMAGEMAGICK_LIBS_DIR)/libMagick++.a \
-		$(IMAGEMAGICK_LIBS_DIR)/libMagick.a \
 		/usr/lib/libexpat.a \
 		/usr/lib/libxml2.a \
 		/usr/lib/libfreetype.a \
