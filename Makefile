@@ -46,6 +46,7 @@ STATIC_X11_LIBFILES= \
 		/usr/X11R6/lib/libXinerama.a \
 		/usr/X11R6/lib/libXrandr.a \
 		/usr/X11R6/lib/libXrender.a \
+		/usr/X11R6/lib/libGL.a \
 		/usr/X11R6/lib/libdpstk.a \
 		/usr/X11R6/lib/libdps.a
 STATIC_OTHER_LIBFILES= \
