@@ -196,15 +196,16 @@ QString processor_t::start_loading_image(const QString &fname)
 
 		// start loading image
 
-	if (fileinfo.extension(FALSE).lower() == "crw" ||
-		fileinfo.extension(FALSE).lower() == "x-canon-raw") {
+	const QString ext=fileinfo.extension(FALSE).lower();
+	if (ext == "nef" || ext == "crw" || ext == "x-canon-raw" ||
+						ext == "mrw" || ext == "orf" || ext == "dcr") {
 		QStringList args;
 		args << "dcraw";
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
-		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds
-		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds
+		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds !!! D30 specific
+		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds !!! D30 specific
 		args << fname;
 
 		/*	formula to convert exposure and white level values from old
@@ -222,7 +223,13 @@ QString processor_t::start_loading_image(const QString &fname)
 			delete external_reader_process;
 			external_reader_process=NULL;
 
-			return "external reader process could not be started";
+			return "Helper process (dcraw) could not be started.\n\n"
+				"dcraw is a program by Dave Coffin that reads digital camera \n"
+				"RAW files. To use these files in photoproc, you should \n"
+				"download it from one of the following websites:\n\n"
+				"http://www.cybercom.net/~dcoffin/dcraw/\n"
+				"http://home.arcor.de/benjamin_lebsanft/\n"
+				"http://www.insflug.org/raw/";
 			}
 		}
 	  else
@@ -440,7 +447,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	void open_file_dialog(void)
 		{
 			const QString fname=QFileDialog::getOpenFileName(
-				QString::null,"image files (*.bmp *.tif *.tiff *.psd *.CRW *.crw)",
+				QString::null,"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.NEF *.MRW *.ORF *.DCR)",
 				this,"open image dialog","Open image");
 			if (fname.isNull())
 				return;
