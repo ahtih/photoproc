@@ -78,7 +78,7 @@ clean:
 RELEASE_SOURCES = $(MOC_CPP_SRCS) $(CPP_SRCS) $(HEADERS) Makefile $(DOCFILES)
 RELASE_NAME = $(PROG)-$(VER)
 
-install release: VER = $(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
+install release realclean: VER = $(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
 
 PROGREQ?=$(PROG)
 
@@ -86,6 +86,9 @@ install: $(DOCFILES) $(PROGREQ)
 	mkdir -p $(bindir) $(datadir)/doc/$(RELASE_NAME)
 	install -m 755 -s $(PROG) $(bindir)
 	install -m 644 $(DOCFILES) $(datadir)/doc/$(RELASE_NAME)
+
+realclean: clean
+	rm -rf $(RELASE_NAME) $(RELASE_NAME).zip $(RELASE_NAME).tar.gz $(RELASE_NAME).spec $(RELASE_NAME)*.rpm $(RELASE_NAME)-linux-i386-static-binary.gz
 
 print-creating-release:
 	@echo
