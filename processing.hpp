@@ -34,6 +34,8 @@ class image_reader_t {
 	Lab_to_sRGB_converter_t *Lab_converter;
 	float *gamma_table;		// NULL if no table allocated
 	matrix m;
+	float B_nonlinear_transfer_coeff,B_nonlinear_scaling;
+	float R_nonlinear_transfer_coeff,R_nonlinear_scaling;
 
 	float get_spot_averages(uint x,uint y,uint dest[3],const uint size) const;
 	void load_postprocess(const char * const shooting_info_fname=NULL);

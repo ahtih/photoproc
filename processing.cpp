@@ -359,6 +359,9 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			gamma_table[i]=pow(i / max_value,gamma);
 		}
 
+	R_nonlinear_transfer_coeff=B_nonlinear_transfer_coeff=0;
+	float R_nonlinear_mult=0,B_nonlinear_mult=0;
+
 	vec3d<double> R_data=vec3d<double>::make(1,0,0);
 	vec3d<double> G_data=vec3d<double>::make(0,1,0);
 	vec3d<double> B_data=vec3d<double>::make(0,0,1);
@@ -400,13 +403,25 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			10d_B = 0.047 * screen_R + 0.448 * screen_G + 1     * screen_B
 			*/
 
-		R_data=vec3d<double>::make(1    ,0.093,0.040      );
-		G_data=vec3d<double>::make(0.390,1    ,0.1/*0.45*/);
-		B_data=vec3d<double>::make(0.037,0.261,1          );
+		R_data=vec3d<double>::make(1    	   ,0.12 ,0.04);
+		G_data=vec3d<double>::make(0.15/*0.39*/,1    ,0.1 /*0.45*/);
+		B_data=vec3d<double>::make(0.037       ,0.25 ,1   );
+
+		R_nonlinear_transfer_coeff=0.24;
+		R_nonlinear_mult=0.46;
+
+		B_nonlinear_transfer_coeff=0.39;
+		B_nonlinear_mult=0.57;
 		}
 
+	R_nonlinear_scaling=1.0 / (1-R_nonlinear_transfer_coeff*R_nonlinear_mult);
+	B_nonlinear_scaling=1.0 / (1-B_nonlinear_transfer_coeff*B_nonlinear_mult);
+
 	const double D=determinant3(R_data,G_data,B_data);
-	const vec3d<double> vabaliige=vec3d<double>::make(1,1,1);
+	const vec3d<double> vabaliige=vec3d<double>::make(
+				(1 - R_nonlinear_transfer_coeff) * R_nonlinear_scaling,
+				1,
+				(1 - B_nonlinear_transfer_coeff) * B_nonlinear_scaling);
 	const double normalize_mult[3]={
 						determinant3(vabaliige,G_data,B_data) / D,
 						determinant3(R_data,vabaliige,B_data) / D,
@@ -450,19 +465,28 @@ uint image_reader_t::get_linear_RGB(float dest_rgb[3])
 	if (p >= end_p)
 		return 0;
 
-	float v[3];
+	float r,g,b;
 	/*!!! if (img.ColorSpace == IMAGE::CIELAB)
 		Lab_converter->convert_to_sRGB(v,p[0],
 						*(const schar *)&p[1],*(const schar *)&p[2]);
 	  else */ {
-		v[0]=gamma_table[p->red];
-		v[1]=gamma_table[p->green];
-		v[2]=gamma_table[p->blue];
+		r=gamma_table[p->red];
+		g=gamma_table[p->green];
+		b=gamma_table[p->blue];
 		}
 
-	dest_rgb[0]=m.x_vec.x*v[0] + m.y_vec.x*v[1] + m.z_vec.x*v[2];
-	dest_rgb[1]=m.x_vec.y*v[0] + m.y_vec.y*v[1] + m.z_vec.y*v[2];
-	dest_rgb[2]=m.x_vec.z*v[0] + m.y_vec.z*v[1] + m.z_vec.z*v[2];
+		// Correct sensor nonlinear bleed
+
+	{ const float orig_R=(r-R_nonlinear_transfer_coeff*g) * R_nonlinear_scaling;
+	r=min(r,orig_R); }
+	{ const float orig_B=(b-B_nonlinear_transfer_coeff*g) * B_nonlinear_scaling;
+	b=min(b,orig_B); }
+
+		// Remap sensor primaries to sRGB
+
+	dest_rgb[0]=m.x_vec.x*r + m.y_vec.x*g + m.z_vec.x*b;
+	dest_rgb[1]=m.x_vec.y*r + m.y_vec.y*g + m.z_vec.y*b;
+	dest_rgb[2]=m.x_vec.z*r + m.y_vec.z*g + m.z_vec.z*b;
 
 	p++;
 	return 1;
