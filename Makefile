@@ -82,9 +82,9 @@ install: $(DOCFILES) $(PROGREQ)
 realclean: clean
 	rm -rf $(RELASE_NAME) $(RELASE_NAME).zip $(RELASE_NAME).tar.gz $(RELASE_NAME).spec $(RELASE_NAME)*.rpm $(RELASE_NAME)-linux-i386-static-binary.gz
 
-releasechanges: $(MOC_CPP_SRCS)
-	@cvs log -SN `cvs status -v qt-main.cpp | grep 'revision: ' | head -1 |\
-		sed -e 's/^.*release-/-rrelease-/' -e 's/ .*/::/'` | \
+relnotes: $(MOC_CPP_SRCS)
+	@cvs log -SN `cvs status -v $(MOC_CPP_SRCS) | grep 'revision: ' | \
+		head -1 | sed -e 's/^.*release-/-rrelease-/' -e 's/ .*/::/'` | \
 		egrep -v '^RCS file:|^head:|^branch:|^locks:|^access list:|^keyword substitution:|^total revisions:|^description:|^----------------------------' | \
 		sed -e 's/^revision [0-9].*//' -e 's/^date: .*author:.*state:.*//'
 
