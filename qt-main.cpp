@@ -3,6 +3,7 @@
 */
 
 #include <qapplication.h>
+#include <qclipboard.h>
 #include <qpopupmenu.h>
 #include <qmenubar.h>
 #include <qmainwindow.h>
@@ -417,6 +418,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	protected:
 
 	QString image_fname;
+	QString spot_values_clipboard;
 
 	QPopupMenu file_menu;
 	image_widget_t *image_widget;
@@ -441,6 +443,24 @@ class image_window_t : public QMainWindow, public processor_t {
 		const char *name;
 		vec<uint> dimensions;
 		} output_dimensions[];
+
+	void key_event(QKeyEvent * const e)
+		{
+			const uint shift_before=!!(e->state() & Qt::ShiftButton);
+			const uint shift_after=!!(e->stateAfter() & Qt::ShiftButton);
+
+			if (shift_before && !shift_after)
+				QApplication::clipboard()->setText(
+								spot_values_clipboard,QClipboard::Clipboard);
+
+			if (shift_before != shift_after)
+				spot_values_clipboard=QString::null;
+
+			e->ignore();
+			}
+
+	virtual void keyPressEvent(QKeyEvent *e)	{ key_event(e); }
+	virtual void keyReleaseEvent(QKeyEvent *e)	{ key_event(e); }
 
 	virtual bool event(QEvent *e);
 	virtual void moveEvent(QMoveEvent *e)
@@ -473,6 +493,13 @@ class image_window_t : public QMainWindow, public processor_t {
 				return;
 
 			load_image(fname);
+			}
+
+	void add_to_spot_values_clipboard(const QString &str)
+		{
+			if (!spot_values_clipboard.isEmpty())
+				spot_values_clipboard+='\n';
+			spot_values_clipboard+=str;
 			}
 
 	void save_as(void)
@@ -702,16 +729,23 @@ void image_widget_t::mousePressEvent(QMouseEvent *e)
 
 	const QRgb screen_rgb=qimage.pixel(pos.x,pos.y);
 
-	char buf[200];
-	sprintf(buf,"Values in file: %u/%u/%u\n"
-				"RGB on screen: %u/%u/%u",	values_in_file[0],
-											values_in_file[1],
-											values_in_file[2],
-											qRed(screen_rgb),
-											qGreen(screen_rgb),
-											qBlue(screen_rgb));
-	QMessageBox::information(this,MESSAGE_BOX_CAPTION,buf,
-						QMessageBox::Ok,QMessageBox::NoButton);
+	if ((e->state() & Qt::ShiftButton) != 0)
+		image_window->add_to_spot_values_clipboard(
+								QString::number(values_in_file[0]) + "\t" +
+								QString::number(values_in_file[1]) + "\t" +
+								QString::number(values_in_file[2]));
+	  else {
+		char buf[200];
+		sprintf(buf,"Values in file: %u/%u/%u\n"
+					"RGB on screen: %u/%u/%u",	values_in_file[0],
+												values_in_file[1],
+												values_in_file[2],
+												qRed(screen_rgb),
+												qGreen(screen_rgb),
+												qBlue(screen_rgb));
+		QMessageBox::information(this,MESSAGE_BOX_CAPTION,buf,
+							QMessageBox::Ok,QMessageBox::NoButton);
+		}
 	}
 
 void image_widget_t::resizeEvent(QResizeEvent *)
