@@ -47,8 +47,10 @@ class image_reader_t {
 		float aperture;			// 2.8, 5.6 etc
 		float exposure_time;	// value in seconds
 		float focal_length_mm;
+		char camera_type[100];
 
-		void clear(void) { ISO_speed=0; aperture=focal_length_mm=-1; }
+		void clear(void) { camera_type[0]='\0'; ISO_speed=0;
+							aperture=exposure_time=focal_length_mm=-1; }
 		shooting_info_t(void) { clear(); }
 		};
 	shooting_info_t shooting_info;

@@ -153,6 +153,8 @@ class processor_t :
 			char buf[500];
 
 			*buf='\0';
+			if (*info.camera_type)
+				sprintf(strchr(buf,'\0'),"Camera: %s\n",info.camera_type);
 			if (info.ISO_speed)
 				sprintf(strchr(buf,'\0'),"ISO speed: %u\n",info.ISO_speed);
 			if (info.aperture > 0)

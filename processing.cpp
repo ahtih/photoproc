@@ -206,6 +206,22 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 		if (tag_type == 0x5029)
 			shooting_info.focal_length_mm=read_uint(fd,2,taginfo_pos + 2);
 
+		if (tag_type == 0x80a && tag_len) {
+			char camera_name_buf[32];
+			const uint read_len=min(sizeof(camera_name_buf),tag_len);
+
+			lseek(fd,tag_offset,SEEK_SET);
+			if (read(fd,camera_name_buf,read_len) == (sint)read_len) {
+				const void * const p=memchr(camera_name_buf,'\0',read_len);
+				if (p != NULL) {
+					const char * const camera_name=((const char *)p) + 1;
+					if (memchr(camera_name,'\0',
+							read_len - (camera_name-camera_name_buf)) != NULL)
+						strcpy(shooting_info.camera_type,camera_name);
+					}
+				}
+			}
+
 		if ((tag_type >> 8) == 0x30 || (tag_type >> 8) == 0x28)
 			parse_tags(fd,tag_offset,tag_len);
 
@@ -308,55 +324,63 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			gamma_table[i]=pow(i / max_value,gamma);
 		}
 
-	/* measured transfer matrix for Canon D30:
+	vec3d<double> R_data=vec3d<double>::make(1,0,0);
+	vec3d<double> G_data=vec3d<double>::make(0,1,0);
+	vec3d<double> B_data=vec3d<double>::make(0,0,1);
 
-		d30_R = 1     * screen_R + 0.264 * screen_G + 0.033 * screen_B
-		d30_G = 0.152 * screen_R + 1     * screen_G + 0.292 * screen_B
-		d30_B = 0.047 * screen_R + 0.411 * screen_G + 1     * screen_B
-		*/
+	if (!strcmp(shooting_info.camera_type,"Canon EOS D30")) {
 
-	/*	Canon 10D:
+		/* measured transfer matrix for Canon D30:
+			d30_R = 1     * screen_R + 0.264 * screen_G + 0.033 * screen_B
+			d30_G = 0.152 * screen_R + 1     * screen_G + 0.292 * screen_B
+			d30_B = 0.047 * screen_R + 0.411 * screen_G + 1     * screen_B
+			*/
 
-		black		116		68		62
+		R_data=vec3d<double>::make(1    ,0.152,0.047       );
+		G_data=vec3d<double>::make(0.264,1    ,0.1/*0.411*/);
+		B_data=vec3d<double>::make(0.033,0.292,1           );
+		}
 
-		red-80		7314	744		372			5813	580		264
-		red-ff		36403	3446	1530		28011	2794	1387
+	if (!strcmp(shooting_info.camera_type,"Canon EOS 10D")) {
 
-		green-80	3366	8404	3728		2569	6486	2851
-		green-ff	15766	40224	18143		13429	33977	15258
+		/*	Canon 10D:
 
-		blue-80		338		1799	6807		235		1394	5340
-		blue-ff		1491	9858	37642		1168	8065	31079
+			black		116		68		62
+			red-80		7314	744		372			5813	580		264
+			red-ff		36403	3446	1530		28011	2794	1387
+			green-80	3366	8404	3728		2569	6486	2851
+			green-ff	15766	40224	18143		13429	33977	15258
+			blue-80		338		1799	6807		235		1394	5340
+			blue-ff		1491	9858	37642		1168	8065	31079
+			white-ff	48663	49796	53424
 
-		white-ff	48663	49796	53424
+			based on high values:
+			10d_R = 1     * screen_R + 0.390 * screen_G + 0.037 * screen_B
+			10d_G = 0.093 * screen_R + 1     * screen_G + 0.261 * screen_B
+			10d_B = 0.040 * screen_R + 0.450 * screen_G + 1     * screen_B
 
-		based on high values:
-		10d_R = 1     * screen_R + 0.390 * screen_G + 0.037 * screen_B
-		10d_G = 0.093 * screen_R + 1     * screen_G + 0.261 * screen_B
-		10d_B = 0.040 * screen_R + 0.450 * screen_G + 1     * screen_B
+			based on low values:
+			10d_R = 1     * screen_R + 0.393 * screen_G + 0.034 * screen_B
+			10d_G = 0.098 * screen_R + 1     * screen_G + 0.258 * screen_B
+			10d_B = 0.047 * screen_R + 0.448 * screen_G + 1     * screen_B
+			*/
 
-		based on low values:
-		10d_R = 1     * screen_R + 0.393 * screen_G + 0.034 * screen_B
-		10d_G = 0.098 * screen_R + 1     * screen_G + 0.258 * screen_B
-		10d_B = 0.047 * screen_R + 0.448 * screen_G + 1     * screen_B
-		*/
+		R_data=vec3d<double>::make(1    ,0.093,0.040      );
+		G_data=vec3d<double>::make(0.390,1    ,0.1/*0.45*/);
+		B_data=vec3d<double>::make(0.037,0.261,1          );
+		}
 
-										// 10D high:		// D30:
-	const vec3d<double> col1={1    ,0.093,0.040};		// {1    ,0.152,0.047};
-	const vec3d<double> col2={0.390,1    ,0.1/*0.45*/};	// {0.264,1    ,0.1/*0.411*/};
-	const vec3d<double> col3={0.037,0.261,1    };		// {0.033,0.292,1    };
-
-	const double D=determinant3(col1,col2,col3);
+	const double D=determinant3(R_data,G_data,B_data);
 	const vec3d<double> vabaliige=vec3d<double>::make(1,1,1);
 	const double normalize_mult[3]={
-						determinant3(vabaliige,col2,col3) / D,
-						determinant3(col1,vabaliige,col3) / D,
-						determinant3(col1,col2,vabaliige) / D,
+						determinant3(vabaliige,G_data,B_data) / D,
+						determinant3(R_data,vabaliige,B_data) / D,
+						determinant3(R_data,G_data,vabaliige) / D,
 						};
 
-	m.x_vec=(col1 * normalize_mult[0]).tofloat();
-	m.y_vec=(col2 * normalize_mult[1]).tofloat();
-	m.z_vec=(col3 * normalize_mult[2]).tofloat();
+	m.x_vec=(R_data * normalize_mult[0]).tofloat();
+	m.y_vec=(G_data * normalize_mult[1]).tofloat();
+	m.z_vec=(B_data * normalize_mult[2]).tofloat();
 
 	m.inverse();
 	}
