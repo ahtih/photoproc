@@ -1142,11 +1142,13 @@ void image_window_t::load_image(const QString &fname)
 									is_external_reader_process_running())
 		return;
 
+	uint is_crop_active=(top_crop->get_value() || bottom_crop->get_value() ||
+						left_crop->get_value() || right_crop->get_value());
 	const uint window_pixels=size().width() * size().height();
 	const uint file_size=QFileInfo(fname).size();
 
 	const QString error_text=start_loading_image(fname,
-												window_pixels > file_size/3);
+							is_crop_active || (window_pixels > file_size/3));
 	if (!error_text.isNull()) {
 		QMessageBox::warning(this,MESSAGE_BOX_CAPTION,error_text,
 								QMessageBox::Ok,QMessageBox::NoButton);
@@ -1192,7 +1194,10 @@ void image_window_t::load_image(const QString &fname)
 
 void image_window_t::crop_params_changed(void)
 {
-	ensure_fullres_loaded_image();
+	if (top_crop->get_value() || bottom_crop->get_value() ||
+						left_crop->get_value() || right_crop->get_value())
+		ensure_fullres_loaded_image();
+
 	processor.set_crop(	top_crop->get_value(),
 						bottom_crop->get_value(),
 						left_crop->get_value(),
