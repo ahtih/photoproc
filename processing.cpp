@@ -374,9 +374,9 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			d30_B = 0.047 * screen_R + 0.411 * screen_G + 1     * screen_B
 			*/
 
-		R_data=vec3d<double>::make(1    ,0.152,0.047       );
-		G_data=vec3d<double>::make(0.264,1    ,0.1/*0.411*/);
-		B_data=vec3d<double>::make(0.033,0.292,1           );
+		R_data=vec3d<double>::make(1    ,0.152,0.047        );
+		G_data=vec3d<double>::make(0.264,1    ,0.411 /*0.1*/);
+		B_data=vec3d<double>::make(0.033,0.292,1            );
 		}
 
 	if (!strcmp(shooting_info.camera_type,"Canon EOS 10D")) {
@@ -403,15 +403,9 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			10d_B = 0.047 * screen_R + 0.448 * screen_G + 1     * screen_B
 			*/
 
-		R_data=vec3d<double>::make(1    	   ,0.12 ,0.04);
-		G_data=vec3d<double>::make(0.15/*0.39*/,1    ,0.1/*0.45*/);
-		B_data=vec3d<double>::make(0.037       ,0.25 ,1   );
-
-		R_nonlinear_transfer_coeff=0.24;
-		R_nonlinear_mult=0.46;
-
-		B_nonlinear_transfer_coeff=0.39;
-		B_nonlinear_mult=0.57;
+		R_data=vec3d<double>::make(1    , 0.12  ,0.04);
+		G_data=vec3d<double>::make(0.39,  1     ,0.446 /*0.1*/);
+		B_data=vec3d<double>::make(0.037, 0.261 ,  1  );
 		}
 
 	R_nonlinear_scaling=1.0 / (1-R_nonlinear_transfer_coeff*R_nonlinear_mult);
