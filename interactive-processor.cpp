@@ -139,6 +139,9 @@ interactive_image_processor_t::interactive_image_processor_t(
 
 interactive_image_processor_t::~interactive_image_processor_t(void)
 {
+	Write(NULL,0);
+	wait(20*1000);
+
 	if (lowres_phase1_image != NULL)
 		delete [] lowres_phase1_image;
 	}
@@ -198,30 +201,33 @@ void interactive_image_processor_t::run(void)
 		void *ptr=Read(len);
 
 		const cmd_packet_t * const packet=(const cmd_packet_t *)ptr;
-		if (len == sizeof(*packet)) {
-			result_t result;
-			result.operation_type=packet->operation_type;
-			result.error_text=NULL;
-
-			if (packet->operation_type == LOAD_FILE) {
-				QMutexLocker req(&image_load_mutex);
-				image_reader.load_file(packet->fname);
-				}
-			if (packet->operation_type == LOAD_FROM_MEMORY) {
-				QMutexLocker req(&image_load_mutex);
-				image_reader.load_from_memory(packet->param_ptr,
-										packet->param_uint,packet->fname);
-				}
-			else
-			if (packet->operation_type == PROCESSING)
-				do_processing(packet->params);
-			else
-			if (packet->operation_type == FULLRES_PROCESSING)
-				do_fullres_processing(packet->params,packet->fname);
-
-			results_queue.Write(&result,sizeof(result));
-			notification_receiver->operation_completed();
+		if (len != sizeof(*packet)) {
+			Release(ptr);
+			break;
 			}
+
+		result_t result;
+		result.operation_type=packet->operation_type;
+		result.error_text=NULL;
+
+		if (packet->operation_type == LOAD_FILE) {
+			QMutexLocker req(&image_load_mutex);
+			image_reader.load_file(packet->fname);
+			}
+		if (packet->operation_type == LOAD_FROM_MEMORY) {
+			QMutexLocker req(&image_load_mutex);
+			image_reader.load_from_memory(packet->param_ptr,
+									packet->param_uint,packet->fname);
+			}
+		else
+		if (packet->operation_type == PROCESSING)
+			do_processing(packet->params);
+		else
+		if (packet->operation_type == FULLRES_PROCESSING)
+			do_fullres_processing(packet->params,packet->fname);
+
+		results_queue.Write(&result,sizeof(result));
+		notification_receiver->operation_completed();
 
 		Release(ptr);
 		}
