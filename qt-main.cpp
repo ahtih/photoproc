@@ -328,13 +328,23 @@ class slider_t : public QHBox {
 	const QString display_format;
 	QLabel *value_display;
 
+	public:
+
+	float get_value(void) const { return slider->value() / 100.0; }
+
+	protected:
+
+	virtual QString get_value_text(const float value)
+		{
+			QString str;
+			return str.sprintf(display_format,value);
+			}
+
 	public slots:
 
 	void value_changed(void)
 		{
-			char buf[100];
-			sprintf(buf,display_format,slider->value() / 100.0);
-			value_display->setText(buf);
+			value_display->setText(get_value_text(get_value()));
 			}
 
 	public:
@@ -350,14 +360,7 @@ class slider_t : public QHBox {
 			setSpacing(5);
 			new QLabel(QString(name) + ":",this);
 
-			QFont font;
-			QFontMetrics font_metrics(font);
 			value_display=new QLabel("",this);
-			value_display->setFont(font);
-
-			char buf[100];
-			sprintf(buf,display_format,(float)max_value - 1/100.0);
-			value_display->setFixedWidth(font_metrics.width(buf));
 
 			slider=new QSlider(	(sint)floor(min_value*100 + 0.5),
 								(sint)floor(max_value*100 + 0.5),10,
@@ -367,10 +370,37 @@ class slider_t : public QHBox {
 									QWidget::TabFocus|QWidget::ClickFocus));
 
 			connect(slider,SIGNAL(valueChanged(int)),SLOT(value_changed()));
-			value_changed();
 			}
 
-	float get_value(void) const { return slider->value() / 100.0; }
+	virtual void polish(void)
+		{
+			QHBox::polish();
+
+			QFont font;
+			QFontMetrics font_metrics(font);
+			value_display->setFont(font);
+			value_display->setFixedWidth(font_metrics.width(
+								get_value_text(slider->maxValue() / 100.0)));
+			value_changed();
+			}
+	};
+
+class two_color_balance_slider_t : public slider_t {
+	public:
+
+	two_color_balance_slider_t(QWidget * const parent,const char * const name,
+					const float min_value,const float max_value,
+					const float default_value) :
+					slider_t(parent,name,min_value,max_value,default_value) {}
+
+	static float get_value2(const float value)
+		{ return 2-value; }
+
+	virtual QString get_value_text(const float value)
+		{
+			QString str;
+			return str.sprintf("%.2f/%.2f",value,get_value2(value));
+			}
 	};
 
 class crop_spin_box_t : public QHBox {
@@ -446,7 +476,8 @@ class image_window_t : public QMainWindow, public processor_t {
 	slider_t *black_level_slider,*white_clipping_slider;
 
 	QHBox *color_balance_view_hbox;
-	slider_t *red_balance_slider,*blue_balance_slider;
+	two_color_balance_slider_t *red_blue_balance_slider;
+	slider_t *green_balance_slider;
 	QCheckBox *grayscale_checkbox;
 
 	QHBox *crop_view_hbox;
@@ -823,14 +854,14 @@ image_window_t::image_window_t(QApplication * const app) :
 	color_balance_view_hbox=new QHBox(qhbox);
 	color_balance_view_hbox->setSpacing(10);
 
-	red_balance_slider=new slider_t(color_balance_view_hbox,
-											"Red coeff",0.5,1.5,1,"%.2f");
-	connect(red_balance_slider->slider,SIGNAL(valueChanged(int)),
+	red_blue_balance_slider=new two_color_balance_slider_t(
+						color_balance_view_hbox,"Red/blue coeffs",0.3,1.7,1);
+	connect(red_blue_balance_slider->slider,SIGNAL(valueChanged(int)),
 									SLOT(color_and_levels_params_changed()));
 
-	blue_balance_slider=new slider_t(color_balance_view_hbox,
-											"Blue coeff",0.5,1.5,1,"%.2f");
-	connect(blue_balance_slider->slider,SIGNAL(valueChanged(int)),
+	green_balance_slider=new slider_t(color_balance_view_hbox,
+											"Green coeff",0.3,1.7,1,"%.2f");
+	connect(green_balance_slider->slider,SIGNAL(valueChanged(int)),
 									SLOT(color_and_levels_params_changed()));
 
 	grayscale_checkbox=new QCheckBox("Grayscale",color_balance_view_hbox);
@@ -1094,9 +1125,10 @@ void image_window_t::color_and_levels_params_changed(void)
 	params.contrast=contrast_slider->get_value();
 	params.exposure_shift=exposure_slider->get_value();
 
-	params.color_coeffs[0]=red_balance_slider->get_value();
-	params.color_coeffs[1]=1;
-	params.color_coeffs[2]=blue_balance_slider->get_value();
+	params.color_coeffs[0]=red_blue_balance_slider->get_value();
+	params.color_coeffs[1]=green_balance_slider->get_value();
+	params.color_coeffs[2]=two_color_balance_slider_t::get_value2(
+									red_blue_balance_slider->get_value());
 	params.convert_to_grayscale=grayscale_checkbox->isChecked();
 
 	processor.set_color_and_levels_params(params);
