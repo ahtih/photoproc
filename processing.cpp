@@ -186,6 +186,14 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 
 		const uint prev_pos=(uint)lseek(fd,0,SEEK_CUR);
 
+#if 0
+		{ printf("tag 0x%x len %u  tag_value 0x%x",tag_type,tag_len,tag_value);
+		if (tag_len <= 128)
+			for (uint j=0;j < tag_len;j++)
+				printf(" %02x",read_uint(fd,1,tag_offset + j));
+		printf("\n"); }
+#endif
+
 		if (tag_type == 0x1810 && tag_len >= 0x0c + 2) {
 			const uint rotate_code=read_uint(fd,2,tag_offset + 0x0c);
 			switch (rotate_code) {
