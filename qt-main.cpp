@@ -352,10 +352,22 @@ class image_window_t : public QMainWindow, public processor_t {
 	crop_spin_box_t *top_crop,*bottom_crop,*left_crop,*right_crop;
 
 	void set_recent_images_in_file_menu(void);
+	void save_window_pos(void);
 
 	protected:
 
 	virtual bool event(QEvent *e);
+	virtual void moveEvent(QMoveEvent *e)
+		{
+			QMainWindow::moveEvent(e);
+			save_window_pos();
+			}
+
+	virtual void resizeEvent(QResizeEvent *e)
+		{
+			QMainWindow::resizeEvent(e);
+			save_window_pos();
+			}
 
 	public slots:
 
@@ -502,6 +514,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	QSettings settings;
 
 	image_window_t(QApplication * const app);
+	void load_window_pos(void);
 	};
 
 void image_widget_t::ensure_correct_size(void)
@@ -685,11 +698,37 @@ image_window_t::image_window_t(QApplication * const app) :
 
 	select_normal_view();
 
-	resize(1024,768);		//!!!
-
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
 	enable_disable_controls();
+	}
+
+void image_window_t::save_window_pos(void)
+{
+	if (!isVisible() || !isActiveWindow())
+		return;
+
+	settings.writeEntry(SETTINGS_PREFIX  "pos/x",pos().x());
+	settings.writeEntry(SETTINGS_PREFIX  "pos/y",pos().y());
+	settings.writeEntry(SETTINGS_PREFIX "size/x",size().width());
+	settings.writeEntry(SETTINGS_PREFIX "size/y",size().height());
+	}
+
+void image_window_t::load_window_pos(void)
+{
+	bool pos_x_ok=(bool)0;
+	const sint pos_x=settings.readNumEntry(SETTINGS_PREFIX "pos/x",0,&pos_x_ok);
+	bool pos_y_ok=(bool)0;
+	const sint pos_y=settings.readNumEntry(SETTINGS_PREFIX "pos/y",0,&pos_y_ok);
+	if (pos_x_ok && pos_y_ok)
+		move(QPoint(pos_x,pos_y));
+
+	const sint size_x=settings.readNumEntry(SETTINGS_PREFIX "size/x");
+	const sint size_y=settings.readNumEntry(SETTINGS_PREFIX "size/y");
+	if (size_x > 0 && size_y > 0)
+		resize(QSize(size_x,size_y));
+	  else
+		resize(640,480);
 	}
 
 void image_window_t::set_recent_images_in_file_menu(void)
@@ -921,6 +960,7 @@ int main(sint argc,char **argv)
 
 	image_window_t main_window(&app);
 	app.setMainWidget(&main_window);
+	main_window.load_window_pos();
 	main_window.show();
 
 	if (!fnames.isEmpty())
