@@ -15,6 +15,7 @@
 #include <qslider.h>
 #include <qhbox.h>
 #include <qvbox.h>
+#include <qpainter.h>
 #include <qpushbutton.h>
 #include <qcombobox.h>
 #include <qspinbox.h>
@@ -279,6 +280,23 @@ class image_widget_t : public QWidget {
 					QRegion(offset.x,offset.y,qpixmap.width(),qpixmap.height(),
 											QRegion::Rectangle)));
 			bitBlt(this,offset.x,offset.y,&qpixmap);
+
+			/*
+			if (qpixmap.width() <= 1) {
+				QPainter qp;
+				qp.begin(this);
+				const uint x_steps=12;
+				const uint y_steps=12;
+				for (uint x=0;x < x_steps;x++)
+					for (uint y=0;y < y_steps;y++) {
+						qp.fillRect(x * width() / x_steps,
+								y * height() / y_steps,
+								width() / x_steps - 1,height() / y_steps - 1,
+								QColor(	0,
+										y * 0xff / (y_steps-1),
+										x * 0xff / (x_steps-1)));
+						}
+				} */
 			}
 
 	protected:
@@ -1190,11 +1208,17 @@ int main(sint argc,char **argv)
 
 	uint show_only_info=0;
 	QStringList fnames;
-	for (uint i=1;i < (uint)app.argc();i++)
+	for (uint i=1;i < (uint)app.argc();i++) {
+		if (app.argv()[i] == QString("-matrix")) {
+			optimize_transfer_matrix(stdin);
+			return 0;
+			}
+
 		if (app.argv()[i] == QString("-info"))
 			show_only_info=1;
 		  else
 			fnames.append(app.argv()[i]);
+		}
 
 	if (show_only_info && !fnames.isEmpty()) {
 		print_file_info_t print_file_info(fnames);
