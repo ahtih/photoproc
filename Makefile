@@ -1,8 +1,13 @@
 MOC_CPP_SRCS = qt-main.cpp
 CPP_SRCS = processing.cpp interactive-processor.cpp
 HEADERS = processing.hpp interactive-processor.hpp vec.hpp
+DOCFILES = LICENSE
 
 PROG = photoproc
+
+prefix ?= /usr
+bindir ?= $(prefix)/bin
+datadir ?= $(prefix)/share
 
 CFLAGS += -O3 -fomit-frame-pointer
 CFLAGS += -Wall
@@ -27,32 +32,42 @@ MOC=$(QTDIR)/bin/moc
 MOCS = $(MOC_CPP_SRCS:%.cpp=%.moc)
 OBJS = $(CPP_SRCS:%.cpp=%.o) $(MOC_CPP_SRCS:%.cpp=%.o)
 
-all:: $(PROG)
+all: $(PROG)
 
 $(PROG): $(MOCS) $(OBJS)
 	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
 
-clean::
+clean:
 	@rm -rf *.o *.so *.a *.moc $(PROG)
 
-RELEASE_FILES = $(MOC_CPP_SRCS) $(CPP_SRCS) $(HEADERS) Makefile LICENSE
-prefix ?= /usr
+RELEASE_SOURCES = $(MOC_CPP_SRCS) $(CPP_SRCS) $(HEADERS) Makefile $(DOCFILES)
+RELASE_NAME = $(PROG)-$(VER)
 
-release: VER = photoproc-$(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
+install release: VER = $(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
 
-release:: $(RELEASE_FILES)
+install: $(PROG) $(DOCFILES)
+	mkdir -p $(bindir) $(datadir)/doc/$(RELASE_NAME)
+	install -s -m 755 $(PROG) $(bindir)
+	install -s -m 644 $(DOCFILES) $(datadir)/doc/$(RELASE_NAME)
+
+release: $(RELEASE_SOURCES)
 	@echo
-	@echo Creating release $(VER)
+	@echo Creating release $(RELASE_NAME)
 	@echo
-	rm -rf $(VER) $(VER).zip $(VER).tar.gz
-	mkdir $(VER)
-	cp $(RELEASE_FILES) $(VER)
-	tar -czf $(VER).tar.gz $(VER)
-	zip -q $(VER).zip $(RELEASE_FILES)
-	rm -rf $(VER)
-	tar -zxf $(VER).tar.gz
-	$(MAKE) -C $(VER)
-	rm -rf $(VER)
+	rm -rf $(RELASE_NAME) $(RELASE_NAME).zip $(RELASE_NAME).tar.gz $(RELASE_NAME).spec $(RELASE_NAME)*.rpm
+	mkdir $(RELASE_NAME)
+	cp $(RELEASE_SOURCES) $(RELASE_NAME)
+	tar -czf $(RELASE_NAME).tar.gz $(RELASE_NAME)
+	zip -q $(RELASE_NAME).zip $(RELEASE_SOURCES)
+	rm -rf $(RELASE_NAME)
+	cp $(RELASE_NAME).tar.gz rpmbuild-sources/
+	echo Version: $(VER) > $(RELASE_NAME).spec
+	cat specfile >> $(RELASE_NAME).spec
+	rpmbuild --clean --rmspec --rmsource -bs $(RELASE_NAME).spec
+	mv rpmbuild-srpms/$(RELASE_NAME)-1.src.rpm ./$(RELASE_NAME).src.rpm
+	rpmbuild --recompile $(RELASE_NAME).src.rpm
 	@echo
-	@echo Release $(VER) created
-	@echo
+	@echo Release files created:
+	@echo "      " $(RELASE_NAME).zip
+	@echo "      " $(RELASE_NAME).tar.gz
+	@echo "      " $(RELASE_NAME).src.rpm

@@ -1,6 +1,5 @@
 Summary: Simple and fast photo postprocessing editor with sensitometrically correct workflow
 Name: photoproc
-Version: 0.92
 Release: 1
 Copyright: BSD
 Group: Applications/Multimedia
@@ -25,8 +24,7 @@ make RPM_OPT_FLAGS="$RPM_OPT_FLAGS"
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/bin
-install -s -m 755 %{name} %{buildroot}/usr/bin
+%makeinstall
 
 %clean
 rm -rf %{buildroot}
