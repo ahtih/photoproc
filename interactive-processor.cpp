@@ -499,13 +499,24 @@ void interactive_image_processor_t::do_fullres_processing(
 		if ((resize_size.x < resize_size.y) != (image_size.x < image_size.y))
 			resize_size.exchange_components();
 
-		output_img.filterType(Magick::LanczosFilter /*!!!*/);
-		output_img.zoom(Magick::Geometry(resize_size.x,resize_size.y));
+		Magick::Geometry resize_geo(resize_size.x,resize_size.y);
+		resize_geo.aspect((bool)1);
+
+		output_img.filterType(Magick::LanczosFilter);
+		output_img.zoom(resize_geo);
 		}
 
 	if (par.unsharp_mask_radius > 0)
 		output_img.unsharpmask(par.unsharp_mask_radius,
-									par.unsharp_mask_radius/2,1.0f,0.05f);
+										par.unsharp_mask_radius/2,
+#if MagickLibVersion >= 0x600
+					// apparently USM parameters have changed in ImageMagick 6
+										70.0f,MaxRGB * (5.0/255)
+#else
+										1.0f,0.05f
+#endif
+														);
+
 	output_img.depth(8);
 	output_img.write(fname);
 	}
