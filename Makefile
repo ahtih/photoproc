@@ -47,8 +47,8 @@ install release: VER = $(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 
 
 install: $(PROG) $(DOCFILES)
 	mkdir -p $(bindir) $(datadir)/doc/$(RELASE_NAME)
-	install -s -m 755 $(PROG) $(bindir)
-	install -s -m 644 $(DOCFILES) $(datadir)/doc/$(RELASE_NAME)
+	install -m 755 -s $(PROG) $(bindir)
+	install -m 644 $(DOCFILES) $(datadir)/doc/$(RELASE_NAME)
 
 release: $(RELEASE_SOURCES)
 	@echo
