@@ -31,6 +31,8 @@ MOC=$(QTDIR)/bin/moc
 MOCS = $(MOC_CPP_SRCS:%.cpp=%.moc)
 OBJS = $(CPP_SRCS:%.cpp=%.o) $(MOC_CPP_SRCS:%.cpp=%.o)
 
+.PHONY: all clean realclean install release relnotes print-creating-release
+
 all: $(PROG)
 
 $(PROG): $(MOCS) $(OBJS)
