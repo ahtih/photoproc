@@ -1,0 +1,8 @@
+Release 0.93	2004-05-19
+	* added focused distance to shooting info dialog. Apparently only newer
+		Canon EF lenses provide this info to body, though.
+	* fixed a bug where CRW shooting info exposure time was incorrect for
+		exposures longer than about 1 sec
+	* fixed a bug where spot RGB values calculation did not take crop status
+		into account
+	* release build now creates a SRPM, static Linux binary, and static RPM
