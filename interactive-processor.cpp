@@ -125,6 +125,14 @@ void interactive_image_processor_t::set_color_and_levels_params(
 	ensure_processing_level(PASS2);
 	}
 
+void interactive_image_processor_t::set_fullres_processing_params(
+				const vec<uint> &resize_size /* .x==0 if no resize */,
+				const float unsharp_mask_radius /* <=0 if no unsharp mask */)
+{
+	params.fullres_resize_size=resize_size;
+	params.unsharp_mask_radius=unsharp_mask_radius;
+	}
+
 interactive_image_processor_t::interactive_image_processor_t(
 		notification_receiver_t * const _notification_receiver) :
 			notification_receiver(_notification_receiver),
@@ -140,6 +148,8 @@ interactive_image_processor_t::interactive_image_processor_t(
 	params.working_y_size=0;
 	params.undo_enh_shadows=0;
 	params.top_crop=params.bottom_crop=params.left_crop=params.right_crop=0;
+	params.fullres_resize_size.x=params.fullres_resize_size.y=0;
+	params.unsharp_mask_radius=-1.0f;
 
 	start();
 	}
@@ -482,6 +492,20 @@ void interactive_image_processor_t::do_fullres_processing(
 
 	Magick::Image output_img(image_size.x,image_size.y,
 												"BGR",Magick::CharPixel,buf);
+	delete [] buf;
+
+	if (par.fullres_resize_size.x && par.fullres_resize_size.y) {
+		vec<uint> resize_size=par.fullres_resize_size;
+		if ((resize_size.x < resize_size.y) != (image_size.x < image_size.y))
+			resize_size.exchange_components();
+
+		output_img.filterType(Magick::LanczosFilter /*!!!*/);
+		output_img.zoom(Magick::Geometry(resize_size.x,resize_size.y));
+		}
+
+	if (par.unsharp_mask_radius > 0)
+		output_img.unsharpmask(par.unsharp_mask_radius,
+									par.unsharp_mask_radius/2,1.0f,0.05f);
 	output_img.depth(8);
 	output_img.write(fname);
 	}

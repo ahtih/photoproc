@@ -55,6 +55,8 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 		uint undo_enh_shadows;
 		color_and_levels_processing_t::params_t color_and_levels_params;
 		uint top_crop,bottom_crop,left_crop,right_crop;
+		vec<uint> fullres_resize_size;		// .x==0 if no resize
+		float unsharp_mask_radius;			// <=0 if no unsharp mask
 		} params;
 
 	struct cmd_packet_t {
@@ -98,6 +100,9 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 					const uint left_pixels,const uint right_pixels);
 	void set_color_and_levels_params(
 					const color_and_levels_processing_t::params_t &_params);
+	void set_fullres_processing_params(
+			const vec<uint> &resize_size /* .x==0 if no resize */,
+			const float unsharp_mask_radius=-1.0f /* <=0 if no unsharp mask */);
 
 	void start_operation(const operation_type_t operation_type,
 				const char * const fname=NULL,void * const param_ptr=NULL,
