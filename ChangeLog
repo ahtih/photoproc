@@ -1,3 +1,30 @@
+Release 0.95	2004-12-11
+	* if image is (approximately) more than 2x larger than our
+		window, and we are loading it using dcraw, then load it
+		with dcraw -h option (half res, much faster) at first
+		and only when needed re-load it in full res
+	* added angle calculations to spot info (mouse click on image)
+	* when holding down Shift key while clicking on image with mouse,
+		the input file pixel RGB values are now copied to clipboard
+		as a tab-separated table
+	* replaced Red and Blue color balance sliders with Red/Blue
+		(white balance) and Green sliders, which should correspond
+		better to what is usually needed in actual practice
+	* changed default contrast slider setting from 1.6 to 1.3
+	* removed Canon CRW image auto-rotation, as it is now
+		implemented in newer versions of dcraw
+	* changed color correction matrix for Canon EOS 10D and D30
+	* fixed a bug where window position was saved incorrectly
+		if you just resized the window without moving it;
+		this seems to be a bug in Qt
+	* "Open next numbered image" now handles numbering gaps of
+		up to 500, not 100 as before
+	* added -matrix command-line option to calculate color
+		correction matrix based on measurements
+	* added "using namespace MagickLib" to make compilable with
+		newer (6.0.7+) ImageMagick
+	* declared .PHONY targets in Makefile
+
 Release 0.94	2004-06-20
 	* fixed a bug where aspect ratio was (incorrectly) preserved
 		during Save As resizing
