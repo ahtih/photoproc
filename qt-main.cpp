@@ -439,7 +439,6 @@ class two_color_balance_slider_t : public slider_t {
 
 class crop_spin_box_t : public QHBox {
 	Q_OBJECT
-
 	public:
 
 	QSpinBox *spinbox;
@@ -464,7 +463,7 @@ class persistent_checkbox_t : public QCheckBox {
 	public slots:
 
 	void save_state(void)
-		{ settings->writeEntry(settings_key,(int)isChecked()); }
+		{ settings->writeEntry(settings_key,(sint)isChecked()); }
 
 	public:
 	persistent_checkbox_t(const char * const label,QWidget * const parent,
@@ -477,6 +476,29 @@ class persistent_checkbox_t : public QCheckBox {
 			}
 	};
 
+class persistent_spinbox_t : public QSpinBox {
+	Q_OBJECT
+
+	QSettings * const settings;
+	QString settings_key;
+
+	public slots:
+
+	void save_state(void)
+		{ settings->writeEntry(settings_key,value()); }
+
+	public:
+	persistent_spinbox_t(const sint min_value,const sint max_value,
+			const sint default_value,QWidget * const parent,
+			QSettings * const _settings,const char * const _settings_key) :
+						QSpinBox(min_value,max_value,1,parent),
+						settings(_settings), settings_key(_settings_key)
+		{
+			setValue(settings->readNumEntry(settings_key,default_value));
+			connect(this,SIGNAL(valueChanged(int)),SLOT(save_state(void)));
+			}
+	};
+
 class file_save_options_dialog_t : public QDialog {
 	Q_OBJECT
 
@@ -484,6 +506,7 @@ class file_save_options_dialog_t : public QDialog {
 	const QString fname;
 	persistent_checkbox_t *resize_checkbox;
 	persistent_checkbox_t *unsharp_mask_checkbox;
+	persistent_spinbox_t *unsharp_mask_radius_spinbox;
 
 	protected slots:
 
@@ -504,7 +527,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	QString start_fullres_processing_fname;	// empty if fullres processing
 											//    request is not pending
 	uint fullres_processing_do_resize;		// 0 or 1
-	uint fullres_processing_do_USM;			// 0 or 1
+	float fullres_processing_USM_radius;	// <=0 if no unsharp mask
 
 	QValueList<sint> file_menu_load_save_ids;
 
@@ -740,13 +763,13 @@ class image_window_t : public QMainWindow, public processor_t {
 	void ensure_fullres_loaded_image(void);
 
 	void start_fullres_processing(const QString fname,const uint do_resize,
-												const uint do_unsharp_mask)
+										const float unsharp_mask_radius)
 		{
 			ensure_fullres_loaded_image();
 
 			start_fullres_processing_fname=fname;
 			fullres_processing_do_resize=do_resize;
-			fullres_processing_do_USM=do_unsharp_mask;
+			fullres_processing_USM_radius=unsharp_mask_radius;
 
 			if (is_external_reader_process_running())
 				return;		// if the process is running, then load operation
@@ -763,9 +786,7 @@ class image_window_t : public QMainWindow, public processor_t {
 							crop_target_combobox->currentItem()].dimensions;
 
 			processor.set_fullres_processing_params(resize_size,
-											do_unsharp_mask ? 2.0f : -1.0f);
-				//!!! add combobox for unsharp mask radius
-
+														unsharp_mask_radius);
 			processor.start_operation(interactive_image_processor_t::
 										FULLRES_PROCESSING,fname.latin1());
 			set_caption();
@@ -873,8 +894,8 @@ void image_widget_t::resizeEvent(QResizeEvent *)
 
 image_window_t::image_window_t(QApplication * const app) :
 			QMainWindow(NULL,"image_window"), processor_t(this),
-			fullres_processing_do_resize(0), fullres_processing_do_USM(0),
-			file_menu(this)
+			fullres_processing_do_resize(0),
+			fullres_processing_USM_radius(-1.0f), file_menu(this)
 {
 	QVBox * const qvbox=new QVBox(this);
 	setCentralWidget(qvbox);
@@ -1041,9 +1062,18 @@ file_save_options_dialog_t::file_save_options_dialog_t(
 			&image_window->settings,SETTINGS_PREFIX "resize_when_saving");
 	grid->addMultiCellWidget(resize_checkbox,0,0,0,1);
 
-	unsharp_mask_checkbox=new persistent_checkbox_t("Apply Unsharp Mask",
-			this,&image_window->settings,SETTINGS_PREFIX "USM_when_saving");
-	grid->addMultiCellWidget(unsharp_mask_checkbox,1,1,0,1);
+	QHBox * const USM_hbox=new QHBox(this);
+
+	unsharp_mask_checkbox=new persistent_checkbox_t(
+			"Apply Unsharp Mask with radius",USM_hbox,
+			&image_window->settings,SETTINGS_PREFIX "USM_when_saving");
+
+	unsharp_mask_radius_spinbox=new persistent_spinbox_t(1,6,2,
+		USM_hbox,&image_window->settings,SETTINGS_PREFIX "USM_radius");
+
+	new QLabel("  pixels",USM_hbox);
+
+	grid->addMultiCellWidget(USM_hbox,1,1,0,1);
 
 	QPushButton * const ok_button=new QPushButton("OK",this);
 	ok_button->setFocus();
@@ -1059,7 +1089,8 @@ file_save_options_dialog_t::file_save_options_dialog_t(
 void file_save_options_dialog_t::accept(void)
 {
 	image_window->start_fullres_processing(fname,resize_checkbox->isChecked(),
-										unsharp_mask_checkbox->isChecked());
+				unsharp_mask_checkbox->isChecked() ?
+							unsharp_mask_radius_spinbox->value() : -1.0f);
 	QDialog::accept();
 	}
 
@@ -1296,7 +1327,7 @@ bool image_window_t::event(QEvent *e)
 
 	if (!start_fullres_processing_fname.isEmpty())
 		start_fullres_processing(start_fullres_processing_fname,
-					fullres_processing_do_resize,fullres_processing_do_USM);
+				fullres_processing_do_resize,fullres_processing_USM_radius);
 	set_caption();
 
 	interactive_image_processor_t::operation_type_t operation_type;
