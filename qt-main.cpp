@@ -464,7 +464,8 @@ class image_window_t : public QMainWindow, public processor_t {
 	void open_file_dialog(void)
 		{
 			const QString fname=QFileDialog::getOpenFileName(
-				QString::null,"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.NEF *.MRW *.ORF *.DCR)",
+				settings.readEntry(SETTINGS_PREFIX "recent_images/1"),
+				"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.NEF *.MRW *.ORF *.DCR)",
 				this,"open image dialog","Open image");
 			if (fname.isNull())
 				return;
@@ -482,11 +483,24 @@ class image_window_t : public QMainWindow, public processor_t {
 			save_fname.replace(QRegExp("\\.[^.]*$"),"");
 			save_fname+=".bmp";
 
-			const QString fname=QFileDialog::getSaveFileName(save_fname,
+			QString last_save_directory=settings.readEntry(
+										SETTINGS_PREFIX "last_save_directory");
+			if (!last_save_directory.isEmpty())
+				save_fname.prepend(last_save_directory + "/");
+
+			QString fname=QFileDialog::getSaveFileName(save_fname,
 						"BMP files (*.bmp)",this,"save as dialog","Save As");
 
 			if (fname.isEmpty())
 				return;
+
+			last_save_directory=fname;
+			last_save_directory.replace(QRegExp("[\\\\/][^\\\\/]*$"),"");
+			settings.writeEntry(SETTINGS_PREFIX "last_save_directory",
+													last_save_directory);
+
+			if (!fname.contains('.'))
+				fname+=".bmp";
 
 			(new file_save_options_dialog_t(this,fname,output_dimensions[
 					crop_target_combobox->currentItem()].dimensions))->exec();
@@ -502,12 +516,6 @@ class image_window_t : public QMainWindow, public processor_t {
 				menuitem_text.remove(0,1);
 
 			load_image(menuitem_text.stripWhiteSpace());
-			}
-
-	void load_last_image(void)
-		{
-			load_image(settings.readEntry(
-							SETTINGS_PREFIX "recent_images/1"));
 			}
 
 	void open_next_numbered_image(void)
