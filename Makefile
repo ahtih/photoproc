@@ -16,7 +16,6 @@ CFLAGS += -D_GNU_SOURCE -D_THREAD_SAFE -enable-threads
 CFLAGS += -I$(QTDIR)/include -I$(QTDIR)/mkspecs/default -I/usr/include/freetype2
 CFLAGS += -D_REENTRANT -DQT_NO_DEBUG -DQT_THREAD_SUPPORT
 LDADD += -Wl,-rpath,$(QTDIR)/lib -L$(QTDIR)/lib -L/usr/X11R6/lib -lpthread -lXext -lX11 -lm -lqt-mt
-# for qt static linking: LDADD += /usr/lib/qt-3.0.5/lib/libqt-mt.a -lGL -lXft -lSM -lXinerama -lmng -lpng
 
 CPP=g++
 LD=g++
@@ -37,34 +36,41 @@ all: $(PROG)
 $(PROG): $(MOCS) $(OBJS)
 	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
 
-STATIC_LIBFILES=/usr/lib/libMagick++.a \
-		/usr/lib/libMagick.a \
+IMAGEMAGICK_LIBS_DIR ?= /usr/lib
+STATIC_QTDIR ?= $(QTDIR)
+
+STATIC_X11_LIBFILES=/usr/X11R6/lib/libXcursor.a \
 		/usr/X11R6/lib/libXft.a \
 		/usr/X11R6/lib/libXinerama.a \
 		/usr/X11R6/lib/libXrandr.a \
-		/usr/X11R6/lib/libXcursor.a \
-		/usr/X11R6/lib/libXrender.a \
-		/usr/lib/libfontconfig.a \
+		/usr/X11R6/lib/libdpstk.a \
+		/usr/X11R6/lib/libdps.a
+STATIC_OTHER_LIBFILES= \
+		$(IMAGEMAGICK_LIBS_DIR)/libMagick++.a \
+		$(IMAGEMAGICK_LIBS_DIR)/libMagick.a \
 		/usr/lib/libexpat.a \
 		/usr/lib/libxml2.a \
 		/usr/lib/libfreetype.a \
 		/usr/lib/libbz2.a \
 		/usr/lib/libz.a \
+		/usr/lib/libjpeg.a \
+		/usr/lib/libpng.a \
 		/usr/lib/libtiff.a
-STATIC_QTDIR ?= $(QTDIR)
 
 $(PROG)-static: GCCLIB_DIR=$(shell dirname `$(CPP) --print-libgcc-file-name`)
 $(PROG)-static: QTDIR=$(STATIC_QTDIR)
 
-$(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(STATIC_LIBFILES) $(MOCS) $(OBJS)
-# half-static, but does not run:  $(LD) -o $@ $(OBJS) -lICE -lSM -lX11 -lXext -lpthread -static-libgcc $(QTDIR)/lib/libqt-mt.a -ldl -Wl,-static,-lXft,-lfontconfig,-lexpat,-lxml2,-lXinerama,-lXrandr,-lXcursor,-lXrender,-lfreetype,-lz `Magick++-config --ldflags --libs`
-# completely static, but crashes: $(LD) -static `Magick++-config --ldflags` -o $@ $(OBJS) $(QTDIR)/lib/libqt-mt.a -pthread -lMagick++ -lMagick -lXft -lX11 -lXext -lGL -lSM -lXinerama -lpng -lXcursor -lXrandr -ltiff -lfontconfig -lICE -lXrender -lfreetype -lexpat -lxml2 -lbz2 -lz -ldl
+$(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(STATIC_X11_LIBFILES) $(STATIC_OTHER_LIBFILES) $(MOCS) $(OBJS)
 	$(LD) -o $@ $(OBJS) -nodefaultlibs -L/usr/X11R6/lib \
 		-lpthread -lXext -lX11 -lm -lc \
-		$(QTDIR)/lib/libqt-mt.a $(STATIC_LIBFILES) -lICE -lSM \
+		$(QTDIR)/lib/libqt-mt.a $(STATIC_X11_LIBFILES) \
+		`find /usr/X11R6/lib -maxdepth 1 -name libXrender.a -print` \
+		`find /usr/lib -maxdepth 1 -name libfontconfig.a -print` \
+		`find /usr/lib -maxdepth 1 -name libmng.a -print` \
+		$(STATIC_OTHER_LIBFILES) -lICE -lSM -lc_nonshared \
+		$(GCCLIB_DIR)/libstdc++.a \
 		$(GCCLIB_DIR)/libgcc.a \
-		$(GCCLIB_DIR)/libgcc_eh.a \
-		$(GCCLIB_DIR)/libstdc++.a
+		`find $(GCCLIB_DIR) -maxdepth 1 -name libgcc_eh.a -print`
 	@forbiddenlibs=`ldd $@ | grep -Ev 'libpthread.so|libXext.so|libX11.so|libm.so|libc.so|libICE.so|libSM.so|libdl.so|ld-linux.so'`; \
 	if [ "$$forbiddenlibs" ] ; then \
 		rm -f $@ ; echo ; echo ; \
