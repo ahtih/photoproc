@@ -1,4 +1,4 @@
-/* Copyright (C) 2003 Ahti Heinla
+/* Copyright (C) 2003-2004 Ahti Heinla
    Licensing conditions are described in the file LICENSE
 */
 
