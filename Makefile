@@ -1,5 +1,6 @@
 MOC_CPP_SRCS = qt-main.cpp
 CPP_SRCS = processing.cpp interactive-processor.cpp
+HEADERS = processing.hpp interactive-processor.hpp vec.hpp
 
 PROG = photoproc
 
@@ -32,4 +33,25 @@ $(PROG): $(MOCS) $(OBJS)
 	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
 
 clean::
-	@rm -f *.o *.so *.a *.moc $(PROG)
+	@rm -rf *.o *.so *.a *.moc $(PROG)
+
+RELEASE_FILES = $(MOC_CPP_SRCS) $(CPP_SRCS) $(HEADERS) Makefile LICENSE
+
+release: VER = photoproc-$(shell grep PHOTOPROC_VERSION $(MOC_CPP_SRCS) | head -1 | cut '-d"' -f2)
+
+release:: $(RELEASE_FILES)
+	@echo
+	@echo Creating release $(VER)
+	@echo
+	rm -rf $(VER) $(VER).zip $(VER).tar.gz
+	mkdir $(VER)
+	cp $(RELEASE_FILES) $(VER)
+	tar -czf $(VER).tar.gz $(VER)
+	zip -q $(VER).zip $(RELEASE_FILES)
+	rm -rf $(VER)
+	tar -zxf $(VER).tar.gz
+	$(MAKE) -C $(VER)
+	rm -rf $(VER)
+	@echo
+	@echo Release $(VER) created
+	@echo
