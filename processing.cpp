@@ -121,6 +121,7 @@ class crw_reader_t {
 	void clear_vars(void) { rotate_degrees=0; shooting_info.clear(); }
 	uint read_uint(const sint fd,const uint nr_of_bytes);
 	uint read_uint(const sint fd,const uint nr_of_bytes,const uint offset);
+	uint read_sshort(const sint fd,const uint offset);
 	uint parse_tags(const sint fd,const uint offset,const uint len);
 		// returns zero if input file is invalid
 
@@ -158,6 +159,12 @@ uint crw_reader_t::read_uint(const sint fd,
 	return read_uint(fd,nr_of_bytes);
 	}
 
+uint crw_reader_t::read_sshort(const sint fd,const uint offset)
+{
+	const uint code=read_uint(fd,2,offset);
+	return (code < 0x8000) ? code : (-(sint)(0x10000-code));
+	}
+
 uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 {							// returns zero if input file is invalid
 	if (len < 4)
@@ -190,15 +197,15 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 			}
 
 		if (tag_type == 0x102a && tag_len >= 4+2+2+2+2) {
-			{ const uint code=read_uint(fd,2,tag_offset + 4);
+			{ const sint code=read_sshort(fd,tag_offset + 4);
 			shooting_info.ISO_speed=(uint)
 							(100 * pow(2,(code - (float)0xa0)/0x20)); }
 
-			{ const uint code=read_uint(fd,2,tag_offset + 4+2+2);
+			{ const sint code=read_sshort(fd,tag_offset + 4+2+2);
 			shooting_info.aperture=
 							16 * pow(2,(code - (float)0x100)/0x40); }
 
-			{ const uint code=read_uint(fd,2,tag_offset + 4+2+2+2);
+			{ const sint code=read_sshort(fd,tag_offset + 4+2+2+2);
 			shooting_info.exposure_time=
 							1/(2000 * pow(2,(code - (float)0x160)/0x20)); }
 			}
