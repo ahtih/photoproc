@@ -39,10 +39,11 @@ $(PROG): $(MOCS) $(OBJS)
 IMAGEMAGICK_LIBS_DIR ?= /usr/lib
 STATIC_QTDIR ?= $(QTDIR)
 
-STATIC_X11_LIBFILES=/usr/X11R6/lib/libXcursor.a \
+STATIC_X11_LIBFILES= \
 		/usr/X11R6/lib/libXft.a \
 		/usr/X11R6/lib/libXinerama.a \
 		/usr/X11R6/lib/libXrandr.a \
+		/usr/X11R6/lib/libXrender.a \
 		/usr/X11R6/lib/libdpstk.a \
 		/usr/X11R6/lib/libdps.a
 STATIC_OTHER_LIBFILES= \
@@ -62,9 +63,9 @@ $(PROG)-static: QTDIR=$(STATIC_QTDIR)
 
 $(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(STATIC_X11_LIBFILES) $(STATIC_OTHER_LIBFILES) $(MOCS) $(OBJS)
 	$(LD) -o $@ $(OBJS) -nodefaultlibs -L/usr/X11R6/lib \
-		-lpthread -lXext -lX11 -lm -lc \
-		$(QTDIR)/lib/libqt-mt.a $(STATIC_X11_LIBFILES) \
-		`find /usr/X11R6/lib -maxdepth 1 -name libXrender.a -print` \
+		-lpthread -lXext -lX11 -lm -lc $(QTDIR)/lib/libqt-mt.a \
+		`find /usr/X11R6/lib -maxdepth 1 -name libXcursor.a -print` \
+		$(STATIC_X11_LIBFILES) \
 		`find /usr/lib -maxdepth 1 -name libfontconfig.a -print` \
 		`find /usr/lib -maxdepth 1 -name libmng.a -print` \
 		$(STATIC_OTHER_LIBFILES) -lICE -lSM -lc_nonshared \
