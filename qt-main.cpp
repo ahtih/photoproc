@@ -31,6 +31,12 @@
 
 #define NR_OF_IMAGES_TO_REMEMBER	20
 
+#if QT_VERSION < 0x030100
+#define POST_EVENT QThread::postEvent
+#else
+#define POST_EVENT QApplication::postEvent
+#endif
+
 class external_reader_process_t : public QProcess {
 	Q_OBJECT
 
@@ -70,8 +76,7 @@ class external_reader_process_t : public QProcess {
 			is_finished=1;
 
 			if (notification_receiver != NULL)
-				QApplication::postEvent(notification_receiver,
-													new QEvent(QEvent::User));
+				POST_EVENT(notification_receiver,new QEvent(QEvent::User));
 			}
 
 	public:
@@ -115,8 +120,7 @@ class processor_t :
 	virtual void operation_completed(void)
 		{			// called in interactive_image_processor_t's thread
 			if (notification_receiver != NULL)
-				QApplication::postEvent(notification_receiver,
-													new QEvent(QEvent::User));
+				POST_EVENT(notification_receiver,new QEvent(QEvent::User));
 			}
 
 	public:
@@ -988,11 +992,7 @@ class print_file_info_t : public QObject, public processor_t {
 	public:
 	print_file_info_t(const QStringList &_fnames) :
 									processor_t(this), fnames(_fnames)
-		{
-			load_next();
-			startTimer(300);	// without it, event cycle somehow does not
-								//   work through ssh
-			}
+		{ load_next(); }
 	};
 
 int main(sint argc,char **argv)
