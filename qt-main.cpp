@@ -210,9 +210,8 @@ QString processor_t::start_loading_image(const QString &fname)
 	const QFileInfo fileinfo(fname);
 
 	if (fname.isEmpty() || !fileinfo.exists()) {
-		char buf[800];
-		sprintf(buf,"File %s not found",fname.latin1());
-		return buf;
+		QString str;
+		return str.sprintf("File %s not found",fname.utf8().data());
 		}
 
 		// start loading image
@@ -1103,7 +1102,7 @@ void image_window_t::load_image(const QString &fname)
 		settings.writeEntry(settings_key,recent_images[i]);
 		}
 
-	set_recent_images_in_file_menu();}
+	set_recent_images_in_file_menu(); }
 	}
 
 void image_window_t::crop_params_changed(void)
