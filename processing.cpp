@@ -3,6 +3,7 @@
 */
 
 #include <string.h>
+#include <stdio.h>
 #include <float.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -306,7 +307,12 @@ image_reader_t::image_reader_t(const char * const fname) :
 
 void image_reader_t::load_file(const char * const fname)
 {
-	img.read(fname);
+	try {
+		img.read(fname);
+		} catch (Magick::Exception &e) {
+			printf("Exception caught in Magick::Image::read(): %s\n",e.what());
+			throw;
+			}
 	load_postprocess(fname);
 	}
 
@@ -315,7 +321,12 @@ void image_reader_t::load_from_memory(const void * const buf,const uint len,
 {
 	Magick::Blob blob;
 	blob.updateNoCopy((void *)buf,len,Magick::Blob::MallocAllocator);
-	img.read(blob);
+	try {
+		img.read(blob);
+		} catch (Magick::Exception &e) {
+			printf("Exception caught in Magick::Image::read(): %s\n",e.what());
+			throw;
+			}
 	load_postprocess(shooting_info_fname);
 	}
 
