@@ -1,0 +1,32 @@
+Summary: Simple and fast photo postprocessing editor with sensitometrically correct workflow
+Name: photoproc
+Release: 1
+Copyright: BSD
+Group: Applications/Multimedia
+BuildRoot: %{_tmppath}/%{name}-%{version}-root
+Source: %{name}-%{version}-static.tar.gz
+
+%description
+Simple and fast photo postprocessing editor with sensitometrically
+correct 48-bit workflow for both digital and scanned photos.
+Contrast, exposure, color corrections, cropping, USM.
+Supports Canon/Nikon/etc digital camera RAW files using dcraw utility.
+
+%prep
+%setup -cq
+
+%build
+cp %{name}-static %{name}
+
+%install
+rm -rf %{buildroot}
+export PROGREQ=LICENSE
+%makeinstall
+
+%clean
+rm -rf %{buildroot}
+
+%files
+%defattr(-,root,root)
+%doc LICENSE
+/usr/bin/%{name}
