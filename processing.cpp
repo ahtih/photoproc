@@ -348,7 +348,8 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 		Lab_converter=new Lab_to_sRGB_converter_t;
 	  else {
 		const uint nr_of_values=1U << QuantumDepth;
-		gamma_table=new float[nr_of_values];
+		if (gamma_table == NULL)
+			gamma_table=new float[nr_of_values];
 
 		const double max_value=nr_of_values-1;
 		for (uint i=0;i < nr_of_values;i++)
