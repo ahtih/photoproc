@@ -204,8 +204,6 @@ QString processor_t::start_loading_image(const QString &fname)
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
-		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds !!! D30 specific
-		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds !!! D30 specific
 		args << fname;
 
 		/*	formula to convert exposure and white level values from old
