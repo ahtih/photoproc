@@ -1,3 +1,18 @@
+Release 0.94	2004-06-20
+	* fixed a bug where aspect ratio was (incorrectly) preserved
+		during Save As resizing
+	* changed Unsharp Mask arguments as they apparently have changed
+		in ImageMagick version 6
+	* file load and save dialogs now remember the directory of last
+		file loaded or saved
+	* on Save As, file extension is now appended automatically if needed
+	* changed the focus policy of sliders to gain keyboard focus
+		on mouse clicks
+	* changed static build so that ImageMagick is no longer linked
+		statically, leaving Qt as the only statically linked component
+	* added try-catch blocks to catch ImageMagick Image::read()
+		exceptions and report them to stdout
+
 Release 0.93	2004-05-19
 	* added focused distance to shooting info dialog. Apparently only newer
 		Canon EF lenses provide this info to body, though.
