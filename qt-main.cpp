@@ -520,7 +520,6 @@ class image_window_t : public QMainWindow, public processor_t {
 	crop_spin_box_t *top_crop,*bottom_crop,*left_crop,*right_crop;
 
 	void set_recent_images_in_file_menu(void);
-	void save_window_pos(void);
 
 	static const struct output_dimensions_t {
 		const char *name;
@@ -549,13 +548,19 @@ class image_window_t : public QMainWindow, public processor_t {
 	virtual void moveEvent(QMoveEvent *e)
 		{
 			QMainWindow::moveEvent(e);
-			save_window_pos();
+			if (isVisible() && isActiveWindow()) {
+				settings.writeEntry(SETTINGS_PREFIX  "pos/x",pos().x());
+				settings.writeEntry(SETTINGS_PREFIX  "pos/y",pos().y());
+				}
 			}
 
 	virtual void resizeEvent(QResizeEvent *e)
 		{
 			QMainWindow::resizeEvent(e);
-			save_window_pos();
+			if (isVisible() && isActiveWindow()) {
+				settings.writeEntry(SETTINGS_PREFIX "size/x",size().width());
+				settings.writeEntry(SETTINGS_PREFIX "size/y",size().height());
+				}
 			}
 
 	public slots:
@@ -1043,17 +1048,6 @@ void image_window_t::target_dimensions_changed(void)
 	settings.writeEntry(SETTINGS_PREFIX "selected_target_dimensions",
 				output_dimensions[crop_target_combobox->currentItem()].name);
 	update_crop_view_label();
-	}
-
-void image_window_t::save_window_pos(void)
-{
-	if (!isVisible() || !isActiveWindow())
-		return;
-
-	settings.writeEntry(SETTINGS_PREFIX  "pos/x",pos().x());
-	settings.writeEntry(SETTINGS_PREFIX  "pos/y",pos().y());
-	settings.writeEntry(SETTINGS_PREFIX "size/x",size().width());
-	settings.writeEntry(SETTINGS_PREFIX "size/y",size().height());
 	}
 
 void image_window_t::load_window_pos(void)
