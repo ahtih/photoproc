@@ -5,6 +5,7 @@ Copyright: BSD
 Group: Applications/Multimedia
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Source: %{name}-%{version}-static.tar.gz
+Requires: ImageMagick-c++
 
 %description
 Simple and fast photo postprocessing editor with sensitometrically

@@ -36,49 +36,27 @@ all: $(PROG)
 $(PROG): $(MOCS) $(OBJS)
 	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
 
-IMAGEMAGICK_LIBS_DIR ?= /usr/lib
 STATIC_QTDIR ?= $(QTDIR)
 
-STATIC_X11_LIBFILES= \
-		$(IMAGEMAGICK_LIBS_DIR)/libMagick++.a \
-		$(IMAGEMAGICK_LIBS_DIR)/libMagick.a \
-		/usr/X11R6/lib/libXft.a \
-		/usr/X11R6/lib/libXinerama.a \
-		/usr/X11R6/lib/libXrandr.a \
-		/usr/X11R6/lib/libXrender.a \
-		/usr/X11R6/lib/libGL.a \
-		/usr/X11R6/lib/libdpstk.a \
-		/usr/X11R6/lib/libdps.a
-STATIC_OTHER_LIBFILES= \
-		/usr/lib/libexpat.a \
-		/usr/lib/libxml2.a \
-		/usr/lib/libfreetype.a \
-		/usr/lib/libbz2.a \
-		/usr/lib/libz.a \
-		/usr/lib/libjpeg.a \
-		/usr/lib/libpng.a \
-		/usr/lib/libtiff.a
+# Qt for photoproc static linking can be built with:
+# (build requires 550Mb disk space, install requires 75Mb)
+#
+# QTDIR=`pwd` ./configure -no-xrandr -no-xcursor -no-ipv6 -no-cups -no-nis
+#			-no-xrender -no-xft -no-xinerama -no-sm
+#			-no-nas-sound -system-libjpeg
+#			-no-imgfmt-mng -disable-opengl -disable-network
+#			-disable-sql -system-zlib
+#			-static -thread -prefix $STATIC_QTDIR
+# QTDIR=`pwd` SUBLIBS="-lpng -ljpeg" make
 
 $(PROG)-static: GCCLIB_DIR=$(shell dirname `$(CPP) --print-libgcc-file-name`)
 $(PROG)-static: QTDIR=$(STATIC_QTDIR)
 
-$(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(STATIC_X11_LIBFILES) $(STATIC_OTHER_LIBFILES) $(MOCS) $(OBJS)
-	$(LD) -o $@ $(OBJS) -nodefaultlibs -L/usr/X11R6/lib \
-		-lpthread -lXext -lX11 -lm -lc $(QTDIR)/lib/libqt-mt.a \
-		`find /usr/X11R6/lib -maxdepth 1 -name libXcursor.a -print` \
-		$(STATIC_X11_LIBFILES) \
-		`find /usr/lib -maxdepth 1 -name libfontconfig.a -print` \
-		`find /usr/lib -maxdepth 1 -name libmng.a -print` \
-		$(STATIC_OTHER_LIBFILES) -lICE -lSM -lc_nonshared \
-		$(GCCLIB_DIR)/libstdc++.a \
-		$(GCCLIB_DIR)/libgcc.a \
-		`find $(GCCLIB_DIR) -maxdepth 1 -name libgcc_eh.a -print`
-	@forbiddenlibs=`ldd $@ | grep -Ev 'libpthread.so|libXext.so|libX11.so|libm.so|libc.so|libICE.so|libSM.so|libdl.so|ld-linux.so'`; \
-	if [ "$$forbiddenlibs" ] ; then \
-		rm -f $@ ; echo ; echo ; \
-		echo "Error: $(PROG)-static uses the following forbidden shared libs:"; \
-		echo $$forbiddenlibs; echo ; exit 1 ; \
-	fi;
+$(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(MOCS) $(OBJS)
+	$(LD) -o $@ $(OBJS) -L/usr/X11R6/lib \
+		`Magick++-config --ldflags --libs` \
+		$(QTDIR)/lib/libqt-mt.a \
+		-lpthread -lXext -lX11 -lm -lc -lc_nonshared -lpng
 
 clean:
 	@rm -rf *.o *.so *.a *.moc $(PROG) $(PROG)-static
