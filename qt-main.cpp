@@ -7,6 +7,7 @@
 #include <qmenubar.h>
 #include <qmainwindow.h>
 #include <qcolor.h>
+#include <qregexp.h>
 #include <qpixmap.h>
 #include <qlabel.h>
 #include <qslider.h>
@@ -22,14 +23,8 @@
 #include <qmessagebox.h>
 #include <qsettings.h>
 
-#include <misc.hpp>
-#include <file.hpp>
 #include "processing.hpp"
 #include "interactive-processor.hpp"
-
-#if MEASURE_BLIT_TIMES
-#include <timer.hpp>
-#endif
 
 #define MESSAGE_BOX_CAPTION 		"photoproc"
 #define SETTINGS_PREFIX				"/photoproc/"
@@ -74,21 +69,15 @@ class image_widget_t : public QWidget {
 
 	void refresh_image(void)
 		{
-#if MEASURE_BLIT_TIMES
-			const uint tim=timer::get_ms();
-#endif
 			qpixmap.convertFromImage(qimage);
 			do_bitblt();
-#if MEASURE_BLIT_TIMES
-			DbgPrintf("time %u ms\n",timer::get_ms()-tim);
-#endif
 			}
 	};
 
 class slider_t : public QHBox {
 	Q_OBJECT
 
-	const STR display_format;
+	const QString display_format;
 	QLabel *value_display;
 
 	public slots:
@@ -156,8 +145,7 @@ class image_window_t : public QMainWindow,
 			private interactive_image_processor_t::notification_receiver_t {
 	Q_OBJECT
 
-	filename image_fname;
-	IMAGE::FILESOURCE *image_load_filesource;	// NULL if no filesource load in progress
+	QString image_fname;
 	external_reader_process_t *external_reader_process;	// NULL if no external_reader_process in progress
 
 	QPopupMenu file_menu;
@@ -203,21 +191,21 @@ class image_window_t : public QMainWindow,
 
 	void save_as(void)
 		{
-			filename save_fname=image_fname;
-			if (!*(const char *)save_fname)
-				return;
-			save_fname.SetExt("bmp");
-
-			const QString fname=QFileDialog::getSaveFileName(
-				save_fname.BaseName(),"BMP files (*.bmp)",
-				this,"save as dialog","Save As");
-			if (fname.isNull())
+			if (image_fname.isEmpty())
 				return;
 
-			DbgPrintf("Saving as %s\n",(const char *)fname);
+			QString save_fname=image_fname;
+			save_fname.replace(QRegExp("^.*[\\\\/]"),"");
+			save_fname.replace(QRegExp("\\.[^.]*$"),"");
+			save_fname+=".bmp";
 
-			processor.start_operation(
-					interactive_image_processor_t::FULLRES_PROCESSING,fname);
+			const QString fname=QFileDialog::getSaveFileName(save_fname,
+						"BMP files (*.bmp)",this,"save as dialog","Save As");
+			if (fname.isEmpty())
+				return;
+
+			processor.start_operation(interactive_image_processor_t::
+										FULLRES_PROCESSING,fname.latin1());
 			enable_disable_controls();
 			}
 
@@ -241,52 +229,33 @@ class image_window_t : public QMainWindow,
 
 	void open_next_numbered_image(void)
 		{
-			const char * const basename=image_fname.BaseName();
-			if (basename == NULL)
+			if (image_fname.isEmpty())
 				return;
 
+			const sint number_idx=image_fname.find(QRegExp("[0-9][^\\\\/]*$"));
+
+			if (number_idx < 0)
+				return;
+
+			QString number_str=image_fname.mid(number_idx);
+			number_str.replace(QRegExp("[^0-9].*$"),"");
+			const uint number=number_str.toUInt();
+
+			QString suffix;
+			const sint suffix_idx=image_fname.findRev(
+												QRegExp("\\.[^\\\\/]*$"));
+			if (suffix_idx >= 0)
+				suffix=image_fname.mid(suffix_idx);
+
 			for (uint increment=1;increment < 100;increment++) {
-				const char *p=basename;
-				const char *end_p=strrchr(p,'.');
-				if (end_p == NULL)
-					end_p=strrchr(p,'\0');
+				const QString new_fname=image_fname.left(number_idx) +
+								QString::number(number + increment) + suffix;
 
-				for (;;p++) {
-					if (p >= end_p)
-						return;
-
-					if (*p >= '0' && *p <= '9')
-						break;
-					}
-
-				filename new_basename;
-				memcpy(new_basename.Name,basename,p - basename);
-				new_basename.Name[p - basename]='\0';
-
-				sprintf(new_basename.Name + strlen(new_basename.Name),
-										"%u",((uint)atoi(p)) + increment);
-				while (*p >= '0' && *p <= '9')
-					p++;
-				strcat(new_basename.Name,p);
-
-				filename directory=image_fname;		directory.StripBaseName();
-
-				filename new_fullname(directory,new_basename);
-
-				if (file::Exists(new_fullname)) {
-					load_image((const char *)new_fullname);
+				if (QFileInfo(new_fname).exists()) {
+					load_image(new_fname);
 					break;
 					}
 				}
-			}
-
-	void load_from_imagesource(IMAGE::SOURCE * const imagesource,
-								const char * const shooting_info_fname=NULL)
-		{
-			processor.start_operation(
-				interactive_image_processor_t::LOAD_FILE,
-									shooting_info_fname,imagesource);
-			enable_disable_controls();
 			}
 
 	void update_crop_view_label(void)
@@ -430,60 +399,63 @@ void image_widget_t::resizeEvent(QResizeEvent *)
 	image_window->check_processing();
 	}
 
-class external_reader_process_t : public QProcess, public IMAGE::SOURCE {
+class external_reader_process_t : public QProcess {
 	Q_OBJECT
 
 	image_window_t * const image_window;
-	filename shooting_info_fname;
-	MEMBLOCK mb;
-	uint cur_read_pos;
+	QString shooting_info_fname;
+
+	void *buf;
+	uint buf_len;
+	uint buf_used_len;
 
 	public slots:
 
 	void read_more_data(void)
 		{
 			const QByteArray array=readStdout();
-			if (array.count())
-				mb.AppendMem(array.data(),array.count());
+			if (!array.count())
+				return;
+
+			if (buf_used_len + array.count() > buf_len) {
+				buf_len=buf_used_len + array.count() + (4U << 20);
+				buf=realloc(buf,buf_len);
+				}
+
+			memcpy(((char *)buf) + buf_used_len,array.data(),array.count());
+			buf_used_len+=array.count();
 			}
 
 	void load_image(void)
 		{
 			read_more_data();
-			image_window->load_from_imagesource(this,shooting_info_fname);
+
+			image_window->processor.start_operation(
+				interactive_image_processor_t::LOAD_FROM_MEMORY,
+								shooting_info_fname.latin1(),buf,buf_used_len);
+			buf=NULL;
+			image_window->enable_disable_controls();
 			}
 
 	public:
 
-	virtual void Seek(int pos) { cur_read_pos=(uint)pos; }
-	virtual void SeekRel(int offs)
-					{ cur_read_pos=(uint)(((sint)cur_read_pos) + offs); }
-
-	virtual void Read(void *buf,int len)
+	virtual ~external_reader_process_t(void)
 		{
-			memcpy(buf,((const char *)mb.Ptr) + cur_read_pos,len);
-			cur_read_pos+=len;
+			if (buf != NULL) {
+				free(buf);
+				buf=NULL;
+				}
 			}
-
-	virtual int ReadTillEof(void *buf,int len)
-		{
-			const uint len_left=((uint)mb.Len) - cur_read_pos;
-			if (len > (sint)len_left)
-				len = (sint)len_left;
-			Read(buf,len);
-			return len;
-			}
-
-	virtual ~external_reader_process_t(void) {}
 
 	external_reader_process_t(image_window_t * const _image_window,
 												const QStringList &args,
-						const char * const _shooting_info_fname=NULL) :
+					const QString &_shooting_info_fname=(const char *)NULL) :
 				QProcess(args,_image_window,"external image reader process"),
-				image_window(_image_window), cur_read_pos(0)
+				image_window(_image_window),
+				buf(NULL), buf_len(0), buf_used_len(0)
 		{
 			if (_shooting_info_fname != NULL)
-				shooting_info_fname.Set(_shooting_info_fname);
+				shooting_info_fname=_shooting_info_fname;
 
 			setCommunication(QProcess::Stdout | QProcess::Stderr);
 
@@ -496,8 +468,7 @@ class external_reader_process_t : public QProcess, public IMAGE::SOURCE {
 
 image_window_t::image_window_t(QApplication * const app) :
 				QMainWindow(NULL,"image_window"),
-				image_load_filesource(NULL), external_reader_process(NULL),
-				file_menu(this), processor(this)
+				external_reader_process(NULL), file_menu(this), processor(this)
 {
 	QVBox * const qvbox=new QVBox(this);
 	setCentralWidget(qvbox);
@@ -612,7 +583,7 @@ image_window_t::image_window_t(QApplication * const app) :
 
 	select_normal_view();
 
-	resize(1280,1024);		//!!!
+	resize(1024,768);		//!!!
 
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
@@ -640,17 +611,16 @@ void image_window_t::set_recent_images_in_file_menu(void)
 		}
 	}
 
-void image_window_t::load_image(const QString &fname_string)
+void image_window_t::load_image(const QString &fname)
 {
-	if (fname_string.isNull() || image_load_filesource != NULL ||
-											external_reader_process != NULL)
+	if (processor.operation_pending_count || external_reader_process != NULL)
 		return;
 
-	const filename fname(fname_string.latin1());
+	const QFileInfo fileinfo(fname);
 
-	if (!*fname || !file::Exists(fname)) {
+	if (fname.isEmpty() || !fileinfo.exists()) {
 		char buf[800];
-		sprintf(buf,"File %s not found",(const char *)fname);
+		sprintf(buf,"File %s not found",fname.latin1());
 		QMessageBox::warning(this,MESSAGE_BOX_CAPTION,buf,
 						QMessageBox::Ok,QMessageBox::NoButton);
 		return;
@@ -658,7 +628,7 @@ void image_window_t::load_image(const QString &fname_string)
 
 		// start loading image
 
-	if (QString(fname.Extension()).lower() == "crw") {
+	if (fileinfo.extension(FALSE).lower() == "crw") {
 		QStringList args;
 		args << "crw";
 		args << "-d";			// Dillon interpolation
@@ -667,7 +637,7 @@ void image_window_t::load_image(const QString &fname_string)
 		args << "-b" << "3.8";	// 3.8x brightness
 		args << "-r" << "1.08";	//  red scaling to fix the green hue in clouds
 		args << "-l" << "1.03";	// blue scaling to fix the green hue in clouds
-		args << fname.Name;
+		args << fname;
 
 		/*	formula to convert exposure and white level values from old
 			"2.4x brightness 0.4 invariant density" system to current system:
@@ -677,8 +647,7 @@ void image_window_t::load_image(const QString &fname_string)
 
 			*/
 
-		external_reader_process=new external_reader_process_t(
-													this,args,fname.Name);
+		external_reader_process=new external_reader_process_t(this,args,fname);
 		if (!external_reader_process->launch()) {
 			delete external_reader_process;
 			external_reader_process=NULL;
@@ -690,17 +659,18 @@ void image_window_t::load_image(const QString &fname_string)
 			}
 		}
 	  else {
-		image_load_filesource=new IMAGE::FILESOURCE(fname);
-		load_from_imagesource(image_load_filesource);
+		processor.start_operation(interactive_image_processor_t::LOAD_FILE,
+															fname.latin1());
+		enable_disable_controls();
 		}
 
-	image_fname.Set(fname);
+	image_fname=fname;
 	enable_disable_controls();
 
 		// update recent images list
 
 	{QString recent_images[NR_OF_IMAGES_TO_REMEMBER];
-	recent_images[0]=QFileInfo(QString(fname)).absFilePath();
+	recent_images[0]=fileinfo.absFilePath();
 	uint nr_of_recent_images=1;
 
 	uint i;
@@ -764,18 +734,13 @@ void image_window_t::enable_disable_controls(void)
 	if (external_reader_process != NULL && !processor.operation_pending_count)
 		status="running external image reader process...";
 
-	setCaption(QString(image_fname) + ":  " + status);
+	setCaption(image_fname + ":  " + status);
 	}
 
 void image_window_t::check_processing(void)
 {
 	if (processor.operation_pending_count)
 		return;
-
-	if (image_load_filesource != NULL) {
-		delete image_load_filesource;
-		image_load_filesource=NULL;
-		}
 
 	if (external_reader_process != NULL) {
 		delete external_reader_process;
@@ -825,9 +790,6 @@ void image_window_t::operation_completed(void)
 
 int main(sint argc,char **argv)
 {
-	if (file::Exists("DbgPrintf.log"))
-		Debug.OpenLog("DbgPrintf.log");
-
 	QApplication app(argc,argv);
 
 	image_window_t main_window(&app);

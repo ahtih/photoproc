@@ -3,8 +3,6 @@
 */
 
 #include <string.h>
-#include <misc.hpp>
-#include <timer.hpp>
 #include "processing.hpp"
 #include "interactive-processor.hpp"
 
@@ -26,6 +24,74 @@
 
 				[siit saab küsida reakaupa 8-bitises 2.2 gammaga RGB's]
 		*/
+
+/***************************************************************************/
+/*******************************             *******************************/
+/******************************* SyncQueue:: *******************************/
+/*******************************             *******************************/
+/***************************************************************************/
+
+SyncQueue::SyncQueue(void) : Head(NULL), Tail(NULL) {}
+
+SyncQueue::~SyncQueue(void)
+{
+	QMutexLocker rm(&mutex);
+	for (Element *e=Head;e != NULL;) {
+		Element *n=e->Next;
+		delete [] (char *) e->DataPtr();
+		e=n;
+		}
+	}
+
+void SyncQueue::Write(const void *ptr,uint len)
+{
+	char * const data=new char[len + sizeof(Element)];
+	memcpy(data,ptr,len);
+
+	Element * const e=(Element *)(data+len);
+	e->Len=len;
+	e->Next=NULL;
+
+	QMutexLocker rm(&mutex);
+	if (Tail != NULL) {
+		Tail->Next=e;
+		Tail=e;
+		}
+	  else
+		Tail=Head=e;
+
+	cond.wakeAll();
+	}
+
+void *SyncQueue::Read(uint &len,const uint no_wait)
+{
+	QMutexLocker rm(&mutex);
+
+	while (1) {
+
+		if (Head != NULL) {
+			Element * const e=Head;
+			Head=Head->Next;
+			if (Head == NULL)
+				Tail=NULL;
+			len=e->Len;
+			return e->DataPtr();
+			}
+
+		if (no_wait)
+			break;
+
+		cond.wait(&mutex);
+		}
+
+	return NULL;
+	}
+
+/***************************************************************************/
+/*********************                                 *********************/
+/********************* interactive_image_processor_t:: *********************/
+/*********************                                 *********************/
+/***************************************************************************/
 
 void interactive_image_processor_t::set_enh_shadows(
 											const uint _undo_enh_shadows)
@@ -68,7 +134,7 @@ interactive_image_processor_t::interactive_image_processor_t(
 	params.undo_enh_shadows=0;
 	params.top_crop=params.bottom_crop=params.left_crop=params.right_crop=0;
 
-	Start();
+	start();
 	}
 
 interactive_image_processor_t::~interactive_image_processor_t(void)
@@ -99,15 +165,21 @@ void interactive_image_processor_t::set_working_res(
 	}
 
 void interactive_image_processor_t::start_operation(
-							const operation_type_t operation_type,
-							const char * const fname,void * const param_ptr)
+				const operation_type_t operation_type,const char * const fname,
+				void * const param_ptr,const uint param_uint)
 {
 	cmd_packet_t packet;
 	packet.operation_type=operation_type;
 	packet.params=params;
 	packet.param_ptr=param_ptr;
-	if (fname != NULL)
-		packet.fname.Set(fname);
+	packet.param_uint=param_uint;
+	packet.fname[0]='\0';
+	if (fname != NULL) {
+		memcpy(packet.fname,fname,
+				(strlen(fname) < sizeof(packet.fname)) ? strlen(fname)+1 :
+														sizeof(packet.fname));
+		packet.fname[sizeof(packet.fname)-1]='\0';
+		}
 
 	Write(&packet,sizeof(packet));
 
@@ -119,34 +191,40 @@ void interactive_image_processor_t::start_operation(
 	operation_pending_count++;
 	}
 
-void interactive_image_processor_t::Process(void *ptr,uint len)
+void interactive_image_processor_t::run(void)
 {
-	const cmd_packet_t * const packet=(const cmd_packet_t *)ptr;
-	if (len != sizeof(*packet))
-		return;
+	while (1) {
+		uint len;
+		void *ptr=Read(len);
 
-	DbgPrintf("iip::Process(): op_type %u\n",(uint)packet->operation_type);
+		const cmd_packet_t * const packet=(const cmd_packet_t *)ptr;
+		if (len == sizeof(*packet)) {
+			result_t result;
+			result.operation_type=packet->operation_type;
+			result.error_text=NULL;
 
-	result_t result;
-	result.operation_type=packet->operation_type;
-	result.error_text=NULL;
+			if (packet->operation_type == LOAD_FILE) {
+				QMutexLocker req(&image_load_mutex);
+				image_reader.load_file(packet->fname);
+				}
+			if (packet->operation_type == LOAD_FROM_MEMORY) {
+				QMutexLocker req(&image_load_mutex);
+				image_reader.load_from_memory(packet->param_ptr,
+										packet->param_uint,packet->fname);
+				}
+			else
+			if (packet->operation_type == PROCESSING)
+				do_processing(packet->params);
+			else
+			if (packet->operation_type == FULLRES_PROCESSING)
+				do_fullres_processing(packet->params,packet->fname);
 
-	if (packet->operation_type == LOAD_FILE) {
-		RequireMutex req(image_load_mutex);
-		image_reader.load_file((IMAGE::SOURCE *)packet->param_ptr,
-															packet->fname);
+			results_queue.Write(&result,sizeof(result));
+			notification_receiver->operation_completed();
+			}
+
+		Release(ptr);
 		}
-	else
-	if (packet->operation_type == PROCESSING)
-		do_processing(packet->params);
-	else
-	if (packet->operation_type == FULLRES_PROCESSING)
-		do_fullres_processing(packet->params,packet->fname);
-
-	//!!! catch exceptions
-
-	results_queue.Write(&result,sizeof(result));
-	notification_receiver->operation_completed();
 	}
 
 uint interactive_image_processor_t::get_operation_results(
@@ -155,7 +233,7 @@ uint interactive_image_processor_t::get_operation_results(
 			// error_text has to be delete []'d by caller
 
 	uint len;
-	void * const ptr=results_queue.Read(len,0);
+	void * const ptr=results_queue.Read(len,1);
 	if (ptr == NULL || len != sizeof(result_t))
 		return 0;
 
@@ -163,11 +241,8 @@ uint interactive_image_processor_t::get_operation_results(
 	operation_type=result->operation_type;
 	error_text=result->error_text;
 
-	DbgPrintf("iip::get_operation_results(): operation %u completed\n",
-													(uint)operation_type);
-
 	operation_pending_count--;
-	if (operation_type == LOAD_FILE) {
+	if (operation_type == LOAD_FILE || operation_type == LOAD_FROM_MEMORY) {
 		is_file_loaded=(error_text == NULL);
 		if (is_file_loaded)
 			ensure_processing_level(PASS1);
@@ -221,7 +296,6 @@ void interactive_image_processor_t::do_processing(const params_t par)
 		}
 
 	if ((sint)par.required_level >= (sint)PASS1) {
-		timer tim;
 		processing_phase1_t phase1(image_reader,par.undo_enh_shadows);
 
 		const vec<uint> src_size=get_image_size(&par);
@@ -281,8 +355,6 @@ void interactive_image_processor_t::do_processing(const params_t par)
 			}
 
 		delete [] sum_buf;
-
-		DbgPrintf("processing pass1 completed, %.1f sec\n",tim.lap() / 1000);
 		}
 
 	if ((sint)par.required_level >= (sint)PASS2) {
@@ -353,19 +425,19 @@ void interactive_image_processor_t::draw_processing_curve(const params_t par) co
 		const uint src_value=(uint)floor(0xffff *
 										sqrt(pow(10,-src_density)) + 0.5);
 		ushort src_rgb[3];
-		src_rgb[0]=src_rgb[1]=src_rgb[2]=(ushort)min(src_value,0xffff);
-
+		src_rgb[0]=src_rgb[1]=src_rgb[2]=(ushort)(
+								(src_value <= 0xffff) ? src_value : 0xffff);
 		uchar dest_rgb[3];
 		pass2.process_pixels(dest_rgb,src_rgb,1,0,sizeof(dest_rgb));
 
 		for (uint c=0;c < lenof(dest_rgb);c++) {
-			uint y=NIL;
+			uint y=par.working_y_size-1;
 			if (dest_rgb[c]) {
 				const float dest_density=-log10(pow(dest_rgb[c] / 255.0,2.2));
 				y=(uint)(dest_density / 4.0 * par.working_y_size);
+				if (y > par.working_y_size-1)
+					y = par.working_y_size-1;
 				}
-			if (y > par.working_y_size-1)
-				y = par.working_y_size-1;
 
 			uchar * const p=par.output_buf +
 					par.dest_bytes_per_pixel * (x + y*par.working_x_size);
@@ -382,7 +454,8 @@ void interactive_image_processor_t::do_fullres_processing(
 {
 	const vec<uint> image_size=get_image_size(&par);
 
-	IMAGE output_img(image_size.x,image_size.y,24);
+	uchar * const buf=new uchar[image_size.x*image_size.y*3];
+
 	processing_phase1_t phase1(image_reader,par.undo_enh_shadows);
 	const color_and_levels_processing_t pass2(par.color_and_levels_params);
 
@@ -390,12 +463,14 @@ void interactive_image_processor_t::do_fullres_processing(
 
 	for (uint y=0;y < image_size.y;y++) {
 		phase1.get_line();
-		pass2.process_pixels(
-					((uchar *)output_img.Buf) + y*image_size.x*3,
+		pass2.process_pixels(buf + y*image_size.x*3,
 					phase1.output_line + 3*par.left_crop,image_size.x,1);
 		}
 
-	output_img.Write(fname,IMAGE::BMP);
+	Magick::Image output_img(image_size.x,image_size.y,
+												"BGR",Magick::CharPixel,buf);
+	output_img.depth(8);
+	output_img.write(fname);
 	}
 
 vec<uint> interactive_image_processor_t::get_image_size(const params_t *par)
@@ -403,13 +478,15 @@ vec<uint> interactive_image_processor_t::get_image_size(const params_t *par)
 	if (par == NULL)
 		par=&params;
 
-	RequireMutex req(image_load_mutex);
+	QMutexLocker req(&image_load_mutex);
 
+	const sint xsize=((sint)image_reader.img.columns()) -
+									(sint)(par->left_crop + par->right_crop);
+	const sint ysize=((sint)image_reader.img.rows()) -
+									(sint)(par->top_crop + par->bottom_crop);
 	const vec<uint> image_size={
-		(uint)max(1,
-		image_reader.img.Width - (sint)(par->left_crop + par->right_crop)),
-		(uint)max(1,
-		image_reader.img.Height - (sint)(par->top_crop + par->bottom_crop))};
+			(uint)((xsize >= 1) ? xsize : 1),
+			(uint)((ysize >= 1) ? ysize : 1)};
 	return image_size;
 	}
 
@@ -417,13 +494,13 @@ void interactive_image_processor_t::get_spot_values(
 							const float x_fraction,const float y_fraction,
 													uint values_in_file[3])
 {
-	RequireMutex req(image_load_mutex);
+	QMutexLocker req(&image_load_mutex);
 	image_reader.get_spot_values(x_fraction,y_fraction,values_in_file);
 	}
 
 image_reader_t::shooting_info_t interactive_image_processor_t::
 												get_shooting_info(void)
 {
-	RequireMutex req(image_load_mutex);
+	QMutexLocker req(&image_load_mutex);
 	return image_reader.shooting_info;
 	}

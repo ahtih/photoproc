@@ -2,21 +2,8 @@
    Licensing conditions are described in the file LICENSE
 */
 
-#include <vec.hpp>
-#include <allocated-array.hpp>
-#include <Image.hpp>
-
-class curve_t {
-
-	const float first_point_x,x_step;
-	allocated_array_t<float> point_values;
-
-	public:
-
-	curve_t(const float * const _point_values,const uint nr_of_points,
-				const float _first_point_x=0,const float _x_step=(float)1);
-	float get_value(float x) const;
-	};
+#include <Magick++.h>
+#include "vec.hpp"
 
 class Lab_to_sRGB_converter_t {
 
@@ -39,21 +26,21 @@ class Lab_to_sRGB_converter_t {
 	};
 
 class image_reader_t {
-	const uchar *p;
-	const uchar *end_p;
-	uint p_step;
+	const Magick::PixelPacket *img_buf;
+	const Magick::PixelPacket *p;
+	const Magick::PixelPacket *end_p;
 	double gamma;
 
 	Lab_to_sRGB_converter_t *Lab_converter;
 	float *gamma_table;		// NULL if no table allocated
 	matrix m;
 
-	static sint get_crw_rotate(const char * const fname);
 	float get_spot_averages(uint x,uint y,uint dest[3],const uint size) const;
+	void load_postprocess(const char * const shooting_info_fname=NULL);
 
 	public:
 
-	IMAGE img;
+	Magick::Image img;
 
 	struct shooting_info_t {
 		uint ISO_speed;
@@ -69,8 +56,11 @@ class image_reader_t {
 	image_reader_t(void);
 	image_reader_t(const char * const fname);
 	void load_file(const char * const fname);
-	void load_file(IMAGE::SOURCE * const image_source,
+	void load_from_memory(const void * const buf,const uint len,
 								const char * const shooting_info_fname=NULL);
+		// buf must be allocated using malloc(); load_from_memory() will
+		//  take it under it's own management, it must NOT be freed by caller
+
 	~image_reader_t(void);
 
 	void reset_read_pointer(void);
@@ -134,4 +124,3 @@ class color_and_levels_processing_t {
 		//  src: 2.0-gamma 16-bit RGB
 		// dest: 2.2-gamma  8-bit RGB
 	};
-

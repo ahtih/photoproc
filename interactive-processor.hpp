@@ -2,14 +2,35 @@
    Licensing conditions are described in the file LICENSE
 */
 
-#include <vec.hpp>
-#include <tasking.hpp>
+#include <qmutex.h>
+#include <qthread.h>
 
-class interactive_image_processor_t : private BackgroundWorkerThread {
+class SyncQueue {
+
+	struct Element {
+		Element *Next;
+		uint Len;
+		
+		void *DataPtr(void){return ((char*)this-Len);}
+	};
+	Element *Head,*Tail;
+
+	QMutex mutex;
+	QWaitCondition cond;
+
+	public:
+	SyncQueue(void);
+	~SyncQueue(void);
+	void Write(const void *ptr,uint len);
+	void *Read(uint &len,const uint no_wait=0);
+	void Release(void *ptr) {delete [] (char *)ptr;}
+};
+
+class interactive_image_processor_t : public QThread, public SyncQueue {
 	public:
 
-	enum operation_type_t {LOAD_FILE=0,PROCESSING,FULLRES_PROCESSING};
-
+	enum operation_type_t {LOAD_FILE=0,LOAD_FROM_MEMORY,
+											PROCESSING,FULLRES_PROCESSING};
 	struct notification_receiver_t {
 		virtual void operation_completed(void)=0;
 			// called in interactive_image_processor_t's thread
@@ -18,7 +39,7 @@ class interactive_image_processor_t : private BackgroundWorkerThread {
 	private:
 
 	notification_receiver_t * const notification_receiver;
-	Mutex image_load_mutex;
+	QMutex image_load_mutex;
 	image_reader_t image_reader;
 	ushort *lowres_phase1_image;		// 2.0-gamma RGB ushort's
 	SyncQueue results_queue;
@@ -40,7 +61,8 @@ class interactive_image_processor_t : private BackgroundWorkerThread {
 		operation_type_t operation_type;
 		params_t params;
 		void *param_ptr;
-		filename fname;
+		uint param_uint;
+		char fname[300];
 		};
 
 	struct result_t {
@@ -49,7 +71,9 @@ class interactive_image_processor_t : private BackgroundWorkerThread {
 		};
 
 	void ensure_processing_level(const required_level_t level);
-	virtual void Process(void *ptr,uint len);
+
+	virtual void run(void);
+
 	void do_processing(const params_t par);
 	void do_fullres_processing(const params_t par,const char * const fname);
 	void draw_processing_curve(const params_t par) const;
@@ -76,7 +100,8 @@ class interactive_image_processor_t : private BackgroundWorkerThread {
 					const color_and_levels_processing_t::params_t &_params);
 
 	void start_operation(const operation_type_t operation_type,
-				const char * const fname=NULL,void * const param_ptr=NULL);
+				const char * const fname=NULL,void * const param_ptr=NULL,
+				const uint param_uint=0);
 	uint get_operation_results(operation_type_t &operation_type,
 														char * &error_text);
 			// returns 0 if no operation results are available

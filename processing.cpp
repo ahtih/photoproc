@@ -3,51 +3,51 @@
 */
 
 #include <string.h>
-#include <ahti.hpp>
+#include <float.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "processing.hpp"
 
-/***************************************************************************/
-/********************************           ********************************/
-/******************************** curve_t:: ********************************/
-/********************************           ********************************/
-/***************************************************************************/
-
-curve_t::curve_t(const float * const _point_values,const uint nr_of_points,
-				const float _first_point_x,const float _x_step) :
-							first_point_x(_first_point_x), x_step(_x_step)
+static double determinant3(	const vec3d<double> &col1,
+							const vec3d<double> &col2,
+							const vec3d<double> &col3)
 {
-	point_values.set_len(nr_of_points);
-	for (uint i=0;i < nr_of_points;i++)
-		point_values[i]=_point_values[i];
+	return	  col1.x*col2.y*col3.z
+			+ col1.z*col2.x*col3.y
+			+ col1.y*col2.z*col3.x
+
+			- col3.x*col2.y*col1.z
+			- col3.z*col2.x*col1.y
+			- col3.y*col2.z*col1.x;
 	}
 
-float curve_t::get_value(float x) const
-{
-	x=(x - first_point_x) / x_step;
+matrix &matrix::inverse(void) {
 
-	if (x <= 0)
-		return point_values[0];
+	matrix dest;
+	vec3d<float> const x = y_vec % z_vec;
+	vec3d<float> const y = z_vec % x_vec;
+	vec3d<float> const z = x_vec % y_vec;
+	dest.x_vec.x = x.x;
+	dest.x_vec.y = y.x;
+	dest.x_vec.z = z.x;
+	dest.y_vec.x = x.y;
+	dest.y_vec.y = y.y;
+	dest.y_vec.z = z.y;
+	dest.z_vec.x = x.z;
+	dest.z_vec.y = y.z;
+	dest.z_vec.z = z.z;
 
-	const uint idx=(uint)floor(x);
+	double const determinant = x.todouble() * x_vec.todouble();
+	if (fabs(determinant) >= 1.0/FLT_MAX) {
+		float const coeff = (float)(1.0 / determinant);
+		dest.x_vec *= coeff;
+		dest.y_vec *= coeff;
+		dest.z_vec *= coeff;
+		}
 
-	if (idx >= point_values.len-1)
-		return point_values[point_values.len-1];
-
-	const float p1=point_values[idx];
-	const float p2=point_values[idx+1];
-
-	const float coeff=x - idx;
-
-		// first choose the derivatives
-
-	const float d1=idx ? (p2 - point_values[idx-1])/2 : 0;
-	const float d2=(idx+2 < point_values.len) ?
-							(point_values[idx+2] - p1)/2 : 0;
-
-		// cubic interpolation
-
-	return p1*(1-coeff) + p2*coeff - coeff*(1-coeff) *
-					( (d2 - d1)/2 + (coeff - 0.5)*(d1 + d2 - 2*(p2 - p1)) );
+	return (*this = dest);
 	}
 
 /***************************************************************************/
@@ -119,8 +119,9 @@ void Lab_to_sRGB_converter_t::convert_to_sRGB(float dest_linear_RGB[3],
 class crw_reader_t {
 
 	void clear_vars(void) { rotate_degrees=0; shooting_info.clear(); }
-	uint read_uint(file &f,const uint nr_of_bytes,const uint offset=NIL);
-	uint parse_tags(file &f,const uint offset,const uint len);
+	uint read_uint(const sint fd,const uint nr_of_bytes);
+	uint read_uint(const sint fd,const uint nr_of_bytes,const uint offset);
+	uint parse_tags(const sint fd,const uint offset,const uint len);
 		// returns zero if input file is invalid
 
 	public:
@@ -134,13 +135,12 @@ class crw_reader_t {
 		// returns nonzero if file is a valid CRW file
 	};
 
-uint crw_reader_t::read_uint(file &f,const uint nr_of_bytes,const uint offset)
+uint crw_reader_t::read_uint(const sint fd,const uint nr_of_bytes)
 {
 	uchar buf[sizeof(uint)];
 
-	if (offset != NIL)
-		f.Seek(offset);
-	f.Read(buf,nr_of_bytes);
+	if (read(fd,buf,nr_of_bytes) != (sint)nr_of_bytes)
+		return 0;
 
 	uint value=0;
 	for (uint i=0;i < nr_of_bytes;i++)		//!!! intel only for now
@@ -149,28 +149,38 @@ uint crw_reader_t::read_uint(file &f,const uint nr_of_bytes,const uint offset)
 	return value;
 	}
 
-uint crw_reader_t::parse_tags(file &f,const uint offset,const uint len)
+uint crw_reader_t::read_uint(const sint fd,
+									const uint nr_of_bytes,const uint offset)
+{
+	if (lseek(fd,offset,SEEK_SET) < 0)
+		return 0;
+
+	return read_uint(fd,nr_of_bytes);
+	}
+
+uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 {							// returns zero if input file is invalid
 	if (len < 4)
 		return 0;
 
-	const uint directory_offset=offset + read_uint(f,4,offset+len-4);
-	f.Seek(directory_offset);
+	const uint directory_offset=offset + read_uint(fd,4,offset+len-4);
+	if (lseek(fd,directory_offset,SEEK_SET) < 0)
+		return 0;
 
-	const uint nr_of_tags=read_uint(f,2);
+	const uint nr_of_tags=read_uint(fd,2);
 
 	for (uint i=0;i < nr_of_tags;i++) {
 
-		const uint tag_type=read_uint(f,2);
-		const uint taginfo_pos=f.CurPos();
-		const uint tag_len=read_uint(f,4);
-		const uint tag_value=read_uint(f,4);
+		const uint tag_type=read_uint(fd,2);
+		const uint taginfo_pos=(uint)lseek(fd,0,SEEK_CUR);
+		const uint tag_len=read_uint(fd,4);
+		const uint tag_value=read_uint(fd,4);
 		const uint tag_offset=offset + tag_value;
 
-		const uint prev_pos=f.CurPos();
+		const uint prev_pos=(uint)lseek(fd,0,SEEK_CUR);
 
 		if (tag_type == 0x1810 && tag_len >= 0x0c + 2) {
-			const uint rotate_code=read_uint(f,2,tag_offset + 0x0c);
+			const uint rotate_code=read_uint(fd,2,tag_offset + 0x0c);
 			switch (rotate_code) {
 				case 0x10e:		rotate_degrees=-90;
 								break;
@@ -180,26 +190,27 @@ uint crw_reader_t::parse_tags(file &f,const uint offset,const uint len)
 			}
 
 		if (tag_type == 0x102a && tag_len >= 4+2+2+2+2) {
-			{ const uint code=read_uint(f,2,tag_offset + 4);
+			{ const uint code=read_uint(fd,2,tag_offset + 4);
 			shooting_info.ISO_speed=(uint)
 							(100 * pow(2,(code - (float)0xa0)/0x20)); }
 
-			{ const uint code=read_uint(f,2,tag_offset + 4+2+2);
+			{ const uint code=read_uint(fd,2,tag_offset + 4+2+2);
 			shooting_info.aperture=
 							16 * pow(2,(code - (float)0x100)/0x40); }
 
-			{ const uint code=read_uint(f,2,tag_offset + 4+2+2+2);
+			{ const uint code=read_uint(fd,2,tag_offset + 4+2+2+2);
 			shooting_info.exposure_time=
 							1/(2000 * pow(2,(code - (float)0x160)/0x20)); }
 			}
 
 		if (tag_type == 0x5029)
-			shooting_info.focal_length_mm=read_uint(f,2,taginfo_pos + 2);
+			shooting_info.focal_length_mm=read_uint(fd,2,taginfo_pos + 2);
 
 		if ((tag_type >> 8) == 0x30 || (tag_type >> 8) == 0x28)
-			parse_tags(f,tag_offset,tag_len);
+			parse_tags(fd,tag_offset,tag_len);
 
-		f.Seek(prev_pos);
+		if (lseek(fd,prev_pos,SEEK_SET) < 0)
+			return 0;
 		}
 
 	return 1;
@@ -211,25 +222,30 @@ uint crw_reader_t::open_file(const char * const fname)
 
 	clear_vars();
 
-	file f(fname);
+	const sint fd=open(fname,O_RDONLY);
+	if (fd < 0)
+		return 0;
 
-	try {
-		char signature[2];
+	char signature[2];
 
-		if (f.Size() < sizeof(signature)+4+4)
-			return 0;
+	const uint file_size=(uint)lseek(fd,0,SEEK_END);
+	if (file_size < sizeof(signature)+4+4)
+		return 0;
 
-		f.Read(signature,sizeof(signature));
-		if (memcmp(signature,"II",sizeof(signature)))
-			return 0;		// big-endian files are not supported for now
+	if (lseek(fd,0,SEEK_SET) < 0)
+		return 0;
 
-		const uint offset=read_uint(f,2);
-		if (offset < sizeof(signature)+4 || offset > f.Size()-4)
-			return 0;
+	if (read(fd,signature,sizeof(signature)) != (sint)sizeof(signature))
+		return 0;
 
-		parse_tags(f,offset,f.Size()-offset);
-		} catch (file_exception &e) { return 0; }
+	if (memcmp(signature,"II",sizeof(signature)))
+		return 0;		// big-endian files are not supported for now
 
+	const uint offset=read_uint(fd,2);
+	if (offset < sizeof(signature)+4 || offset > file_size-4)
+		return 0;
+
+	parse_tags(fd,offset,file_size-offset);
 	return 1;
 	}
 
@@ -250,18 +266,21 @@ image_reader_t::image_reader_t(const char * const fname) :
 
 void image_reader_t::load_file(const char * const fname)
 {
-	IMAGE::FILESOURCE filesource(fname);
-	load_file(&filesource);
+	img.read(fname);
+	load_postprocess(fname);
 	}
 
-void image_reader_t::load_file(IMAGE::SOURCE * const image_source,
-									const char * const shooting_info_fname)
+void image_reader_t::load_from_memory(const void * const buf,const uint len,
+								const char * const shooting_info_fname)
 {
-	img.Load(*image_source);
+	Magick::Blob blob;
+	blob.updateNoCopy((void *)buf,len,Magick::Blob::MallocAllocator);
+	img.read(blob);
+	load_postprocess(shooting_info_fname);
+	}
 
-	if (img.BitDepth < 24)
-		img.Convert(24);
-
+void image_reader_t::load_postprocess(const char * const shooting_info_fname)
+{
 	gamma=2.2;
 
 	if (shooting_info_fname != NULL)
@@ -269,19 +288,19 @@ void image_reader_t::load_file(IMAGE::SOURCE * const image_source,
 			crw_reader_t crw_reader;
 			if (crw_reader.open_file(shooting_info_fname)) {
 				shooting_info=crw_reader.shooting_info;
-				img.Rotate(crw_reader.rotate_degrees);
-				if (img.BitDepth >= 48)
-					gamma=1;
+				img.rotate(crw_reader.rotate_degrees);
+				gamma=1;
 				}
 			}
 
-	p_step=((uint)img.BitDepth) / 8;
+	img_buf=img.getConstPixels(0,0,img.columns(),img.rows());
+
 	reset_read_pointer();
 
-	if (img.ColorSpace == IMAGE::CIELAB)
+	if (0 /*!!! img.ColorSpace == IMAGE::CIELAB */)
 		Lab_converter=new Lab_to_sRGB_converter_t;
 	  else {
-		const uint nr_of_values=(img.BitDepth >= 48) ? 65536 : 256;
+		const uint nr_of_values=1U << QuantumDepth;
 		gamma_table=new float[nr_of_values];
 
 		const double max_value=nr_of_values-1;
@@ -308,7 +327,6 @@ void image_reader_t::load_file(IMAGE::SOURCE * const image_source,
 						determinant3(col1,col2,vabaliige) / D,
 						};
 
-	m.init_with_identity();
 	m.x_vec=(col1 * normalize_mult[0]).tofloat();
 	m.y_vec=(col2 * normalize_mult[1]).tofloat();
 	m.z_vec=(col3 * normalize_mult[2]).tofloat();
@@ -331,13 +349,13 @@ image_reader_t::~image_reader_t(void)
 
 void image_reader_t::reset_read_pointer(void)
 {
-	p=(const uchar *)img.Buf;
-	end_p=p + ((uint)(img.Width*img.Height)) * p_step;
+	p=img_buf;
+	end_p=p + img.columns()*img.rows();
 	}
 
 void image_reader_t::skip_pixels(const uint nr_of_pixels)
 {
-	p+=p_step * nr_of_pixels;
+	p+=nr_of_pixels;
 	}
 
 uint image_reader_t::get_linear_RGB(float dest_rgb[3])
@@ -347,51 +365,42 @@ uint image_reader_t::get_linear_RGB(float dest_rgb[3])
 		return 0;
 
 	float v[3];
-	if (img.BitDepth == 48) {
-		const ushort * const pp=(const ushort *)p;
-		v[0]=gamma_table[pp[2]];
-		v[1]=gamma_table[pp[1]];
-		v[2]=gamma_table[pp[0]];
-		}
-	  else {
-		if (img.ColorSpace == IMAGE::CIELAB) {
-			Lab_converter->convert_to_sRGB(v,p[0],
+	/*!!! if (img.ColorSpace == IMAGE::CIELAB)
+		Lab_converter->convert_to_sRGB(v,p[0],
 						*(const schar *)&p[1],*(const schar *)&p[2]);
-			}
-		  else {
-			v[0]=gamma_table[p[2]];
-			v[1]=gamma_table[p[1]];
-			v[2]=gamma_table[p[0]];
-			}
+	  else */ {
+		v[0]=gamma_table[p->red];
+		v[1]=gamma_table[p->green];
+		v[2]=gamma_table[p->blue];
 		}
 
 	dest_rgb[0]=m.x_vec.x*v[0] + m.y_vec.x*v[1] + m.z_vec.x*v[2];
 	dest_rgb[1]=m.x_vec.y*v[0] + m.y_vec.y*v[1] + m.z_vec.y*v[2];
 	dest_rgb[2]=m.x_vec.z*v[0] + m.y_vec.z*v[1] + m.z_vec.z*v[2];
 
-	p+=p_step;
+	p++;
 	return 1;
 	}
 
 void image_reader_t::get_spot_values(
 			const float x_fraction,const float y_fraction,uint dest[3]) const
 {
-	if (img.Buf == NULL || !img.Width || !img.Height) {
+	if (!img.columns() || !img.rows()) {
 		dest[0]=dest[1]=dest[2]=0;
 		return;
 		}
 
-	sint x=(sint)(x_fraction * img.Width);
+	sint x=(sint)(x_fraction * img.columns());
 	if (x < 0)
 		x = 0;
-	if (x > img.Width-1)
-		x = img.Width-1;
+	if ((uint)x > img.columns()-1)
+		x = img.columns()-1;
 
-	sint y=(sint)(y_fraction * img.Height);
+	sint y=(sint)(y_fraction * img.rows());
 	if (y < 0)
 		y = 0;
-	if (y > img.Height-1)
-		y = img.Height-1;
+	if ((uint)y > img.rows()-1)
+		y = img.rows()-1;
 
 	uint values[3];
 	float best_variation=-1;
@@ -404,12 +413,6 @@ void image_reader_t::get_spot_values(
 			dest[1]=values[1];
 			dest[2]=values[2];
 			}
-		}
-
-	if (img.ColorSpace == IMAGE::RGB) {		// swap BRG --> RGB
-		const uint tmp=dest[0];
-		dest[0]=dest[2];
-		dest[2]=tmp;
 		}
 	}
 
@@ -427,28 +430,19 @@ float image_reader_t::get_spot_averages(uint x,uint y,uint dest[3],
 		}
 
 	const uint beg_x=(x < size/2) ? 0 : (x - size/2);
-	const uint end_x=min(beg_x + size,(uint)img.Width);
+	const uint end_x=min(beg_x + size,img.columns());
 
 	const uint beg_y=(y < size/2) ? 0 : (y - size/2);
-	const uint end_y=min(beg_y + size,(uint)img.Height);
+	const uint end_y=min(beg_y + size,img.rows());
 
 	for (y=beg_y;y < end_y;y++)
 		for (x=beg_x;x < end_x;x++) {
-			const uint idx=3 * (x + y*(uint)img.Width);
+			const Magick::PixelPacket * const p=img_buf + x + y*img.columns();
 
 			uint value[3];
-			if (img.BitDepth >= 48) {
-				const ushort * const p=((const ushort *)img.Buf) + idx;
-				value[0]=p[0];
-				value[1]=p[1];
-				value[2]=p[2];
-				}
-			  else {
-				const uchar * const p=((const uchar *)img.Buf) + idx;
-				value[0]=p[0];
-				value[1]=p[1];
-				value[2]=p[2];
-				}
+			value[0]=p->red;
+			value[1]=p->green;
+			value[2]=p->blue;
 
 			for (uint i=0;i < 3;i++) {
 				sum[i]+=value[i];
@@ -476,8 +470,8 @@ float image_reader_t::get_spot_averages(uint x,uint y,uint dest[3],
 processing_phase1_t::processing_phase1_t(image_reader_t &_image_reader,
 										const uint _undo_enh_shadows) :
 		image_reader(_image_reader), undo_enh_shadows(_undo_enh_shadows),
-		output_line(new ushort [_image_reader.img.Width * 3 + 1]),
-		output_line_end(output_line + _image_reader.img.Width * 3)
+		output_line(new ushort [_image_reader.img.columns() * 3 + 1]),
+		output_line_end(output_line + _image_reader.img.columns() * 3)
 {
 	image_reader.reset_read_pointer();
 	}
@@ -542,7 +536,7 @@ void processing_phase1_t::get_line(void)
 
 void processing_phase1_t::skip_lines(const uint nr_of_lines)
 {
-	image_reader.skip_pixels(nr_of_lines * (uint)image_reader.img.Width);
+	image_reader.skip_pixels(nr_of_lines * image_reader.img.columns());
 	}
 
 /***************************************************************************/
@@ -703,8 +697,7 @@ void color_and_levels_processing_t::process_pixels(
 				const uint dest_bytes_per_pixel) const
 {								//  src: 2.0-gamma 16-bit RGB
 								// dest: 2.2-gamma  8-bit RGB
-	uint remainder[3];
-	zero(remainder);
+	uint remainder[3]={0,0,0};
 
 #define DO_PROCESS_PIXELS(i,dest_c) \
 		{const uint c=translation_tables[i][src[i]] + remainder[i]; \
@@ -735,4 +728,3 @@ void color_and_levels_processing_t::process_pixels(
 
 #undef DO_PROCESS_PIXELS
 	}
-
