@@ -6,6 +6,7 @@
 #include "processing.hpp"
 #include "interactive-processor.hpp"
 
+#define MEASURE_PASS1_TIME	0
 #define MEASURE_PASS2_TIME	0
 
 	/*	processing pipeline:
@@ -31,6 +32,31 @@ class mutex_locker_t {
 	mutex_locker_t(QMutex * const _mutex) : mutex(_mutex) { _mutex->lock(); }
 	~mutex_locker_t(void) { mutex->unlock(); }
 	};
+
+#if MEASURE_PASS1_TIME || MEASURE_PASS2_TIME
+#include <sys/times.h>
+#include <time.h>
+#include <unistd.h>
+#include <stdio.h>
+
+static uint times_unit=0;
+
+static uint get_ms(void)
+{
+	if (!times_unit) {
+#ifdef _SC_CLK_TCK
+			times_unit=sysconf(_SC_CLK_TCK);
+#endif
+			if (!times_unit)
+				times_unit=CLOCKS_PER_SEC;
+		}
+
+	struct tms t;
+	times(&t);
+	return t.tms_utime * 1000 / times_unit;
+	}
+
+#endif
 
 /***************************************************************************/
 /*******************************             *******************************/
@@ -319,6 +345,9 @@ void interactive_image_processor_t::do_processing(const params_t par)
 		}
 
 	if ((sint)par.required_level >= (sint)PASS1) {
+#if MEASURE_PASS1_TIME
+		const clock_t tim=get_ms();
+#endif
 		processing_phase1_t phase1(image_reader,par.undo_enh_shadows);
 
 		const vec<uint> src_size=get_image_size(&par);
@@ -378,15 +407,19 @@ void interactive_image_processor_t::do_processing(const params_t par)
 			}
 
 		delete [] sum_buf;
+
+#if MEASURE_PASS1_TIME
+		printf("pass1: processing time %dms\n",get_ms() - tim);
+#endif
 		}
 
 	if ((sint)par.required_level >= (sint)PASS2) {
 #if MEASURE_PASS2_TIME
-		timer tim;
+		const clock_t tim=get_ms();
 #endif
 		const color_and_levels_processing_t pass2(par.color_and_levels_params);
 #if MEASURE_PASS2_TIME
-		const float init_time=tim.lap();
+		const clock_t init_time=get_ms();
 #endif
 		pass2.process_pixels(par.output_buf,lowres_phase1_image,
 					par.working_x_size * par.working_y_size,
@@ -395,8 +428,8 @@ void interactive_image_processor_t::do_processing(const params_t par)
 		// draw_processing_curve(par);
 
 #if MEASURE_PASS2_TIME
-		DbgPrintf("pass2: init time: %gms processing time: %gms\n",
-													init_time,tim.lap());
+		printf("pass2: init time: %dms processing time: %dms\n",
+										init_time - tim,get_ms() - init_time);
 #endif
 		}
 	}
