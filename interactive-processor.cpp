@@ -547,16 +547,17 @@ void interactive_image_processor_t::do_fullres_processing(
 		output_img.zoom(resize_geo);
 		}
 
-	if (par.unsharp_mask_radius > 0)
-		output_img.unsharpmask(par.unsharp_mask_radius,
-										par.unsharp_mask_radius/2,
-#if MagickLibVersion >= 0x600
-					// apparently USM parameters have changed in ImageMagick 6
-										70.0f,MaxRGB * (5.0/255)
-#else
-										1.0f,0.05f
+	if (par.unsharp_mask_radius > 0) {
+		float amount=0.7f;
+		float threshold=5.0f / 255;
+#if MagickLibVersion >= 0x600 && MagickLibVersion < 0x610
+			// USM parameter scales are different ImageMagick 6.0.x
+		amount*=100.0f;
+		threshold*=MaxRGB;
 #endif
-														);
+		output_img.unsharpmask(par.unsharp_mask_radius,
+								par.unsharp_mask_radius/2,amount,threshold);
+		}
 
 	output_img.depth(8);
 	output_img.write(fname);
