@@ -404,7 +404,7 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			*/
 
 		R_data=vec3d<double>::make(1    	   ,0.12 ,0.04);
-		G_data=vec3d<double>::make(0.15/*0.39*/,1    ,0.1 /*0.45*/);
+		G_data=vec3d<double>::make(0.15/*0.39*/,1    ,0.1/*0.45*/);
 		B_data=vec3d<double>::make(0.037       ,0.25 ,1   );
 
 		R_nonlinear_transfer_coeff=0.24;
@@ -837,4 +837,388 @@ void color_and_levels_processing_t::process_pixels(
 			}
 
 #undef DO_PROCESS_PIXELS
+	}
+
+/***************************************************************************/
+/************************                           ************************/
+/************************ transfer matrix optimizer ************************/
+/************************                           ************************/
+/***************************************************************************/
+
+#define MAX_N	20
+
+class table_t {
+	float buf[MAX_N*MAX_N];
+
+	public:
+
+	uint N;
+
+	table_t(const uint n) : N(n) {}
+
+	      float * operator [] (const uint idx)       { return &buf[idx * N]; }
+	const float * operator [] (const uint idx) const { return &buf[idx * N]; }
+
+	void set_N(const uint n)
+		{
+			N=n;
+			}
+
+	void flip_major_axis(void)
+		{
+			for (uint i=0;i < N/2 /* round down */;i++)
+				for (uint j=0;j < i;j++) {
+					const float tmp=(*this)[i][j];
+					(*this)[i][j]=(*this)[N-1-i][j];
+					(*this)[N-1-i][j]=tmp;
+					}
+			}
+
+	void flip_minor_axis(void)
+		{
+			for (uint i=0;i < N/2 /* round down */;i++)
+				for (uint j=0;j < i;j++) {
+					const float tmp=(*this)[j][i];
+					(*this)[j][i]=(*this)[j][N-1-i];
+					(*this)[j][N-1-i]=tmp;
+					}
+			}
+
+	void transpose(void)
+		{
+			for (uint i=0;i < N;i++)
+				for (uint j=0;j < i;j++) {
+					const float tmp=(*this)[i][j];
+					(*this)[i][j]=(*this)[j][i];
+					(*this)[j][i]=tmp;
+					}
+			}
+	};
+
+struct axis_t {
+	const char * const name;
+	const table_t &actual_table;
+	const table_t &ideal_table;
+	const axis_t * const other_axis;
+
+	float calculate_error(const float predicted_value,
+											const uint i,const uint j) const
+		{
+			return (actual_table[i][j] - predicted_value) * 100.0 * 2 /
+					(actual_table[i][j] + other_axis->actual_table[i][j] + 1);
+			}
+	};
+
+struct nonlinear_prediction_params_t {
+	float linear_coeff,sensor_level_mult,nonlinear_coeff;
+	};
+
+static float calculate_error(const table_t &predicted_table,
+												const axis_t * const t)
+{
+	float sum_of_squares=0;
+
+	for (uint i=0;i < predicted_table.N;i++)
+		for (uint j=0;j < predicted_table.N;j++) {
+			const float error=t->calculate_error(predicted_table[i][j],i,j);
+			sum_of_squares+=error * error;
+			}
+
+	return sqrt(sum_of_squares / (predicted_table.N*predicted_table.N));
+	}
+
+static void print_error_table(const table_t &predicted_table,
+												const axis_t * const t)
+{
+	for (uint j=0;j < predicted_table.N;j++) {
+		for (uint i=0;i < predicted_table.N;i++) {
+			const char *prefix="";
+			if (!i)
+				switch (j) {
+					case 0:	prefix="X->";
+							break;
+					case 1:	prefix="Y";
+							break;
+					case 2:	prefix="|";
+							break;
+					case 3:	prefix="v";
+							break;
+					default:break;
+					}
+			printf("%s%*.0f",prefix,5 - strlen(prefix),
+							t->calculate_error(predicted_table[i][j],i,j));
+			}
+		printf("\n");
+		}
+	}
+
+static void predict_linear_only(const float linear_coeff,table_t &dest_table,
+												const axis_t * const t)
+{
+	for (uint i=0;i < dest_table.N;i++)
+		for (uint j=0;j < dest_table.N;j++)
+			dest_table[i][j]=t->ideal_table[i][j] +
+							linear_coeff * t->other_axis->ideal_table[i][j];
+	}
+
+static float optimize_linear_coeff(float &best_error,const axis_t * const t)
+{
+	float best_linear_coeff=-777;
+	best_error=1e30;
+
+	for (uint i=0;i < 800;i++) {
+		const float linear_coeff=i / 1000.0;
+
+		table_t predicted_table(t->actual_table.N);
+		predict_linear_only(linear_coeff,predicted_table,t);
+		const float error=calculate_error(predicted_table,t);
+		if (best_error > error) {
+			best_error = error;
+			best_linear_coeff=linear_coeff;
+			}
+		}
+
+	return best_linear_coeff;
+	}
+
+static float optimize_linear_and_nonlinear(
+					nonlinear_prediction_params_t &best_params,
+					table_t &best_predicted_table,const axis_t * const t,
+					const table_t &linear_predicted_other_table)
+{		// returns best error
+
+	best_params.linear_coeff=-777;
+	best_params.sensor_level_mult=-777;
+	best_params.nonlinear_coeff=-777;
+
+	float best_error=1e30;
+
+	for (uint linear_coeff_idx=0;linear_coeff_idx < 80;linear_coeff_idx++) {
+		const float linear_coeff=linear_coeff_idx / 100.0;
+
+		table_t linear_predicted_table(t->actual_table.N);
+		predict_linear_only(linear_coeff,linear_predicted_table,t);
+
+		for (uint mult_idx=10;mult_idx < 250;mult_idx++) {
+			const float sensor_level_mult=mult_idx / 100.0;
+
+			table_t sensor_difference_table(t->actual_table.N);
+
+			{ for (uint i=0;i < t->actual_table.N;i++)
+				for (uint j=0;j < t->actual_table.N;j++)
+					sensor_difference_table[i][j]=max(0,
+						linear_predicted_other_table[i][j] -
+						linear_predicted_table[i][j] * sensor_level_mult); }
+
+			for (uint nonlinear_coeff_idx=0;nonlinear_coeff_idx < 80;
+													nonlinear_coeff_idx++) {
+				const float nonlinear_coeff=nonlinear_coeff_idx / 100.0;
+
+				table_t predicted_table(t->actual_table.N);
+
+				{ for (uint i=0;i < t->actual_table.N;i++)
+					for (uint j=0;j < t->actual_table.N;j++)
+						predicted_table[i][j]=linear_predicted_table[i][j] +
+							sensor_difference_table[i][j] * nonlinear_coeff; }
+
+				const float error=calculate_error(predicted_table,t);
+
+				if (best_error > error) {
+					best_error = error;
+					best_params.linear_coeff=linear_coeff;
+					best_params.sensor_level_mult=sensor_level_mult;
+					best_params.nonlinear_coeff=nonlinear_coeff;
+					best_predicted_table=predicted_table;
+					}
+				}
+			}
+		}
+
+	return best_error;
+	}
+
+void optimize_transfer_matrix(FILE * const input_file)
+{
+		/******************************/
+		/*****                    *****/
+		/***** Read input records *****/
+		/*****                    *****/
+		/******************************/
+
+	table_t actual_X(MAX_N),actual_Y(MAX_N);
+
+	printf("Reading records from stdin...\n");
+
+	uint nr_of_input_records=0;
+	for (;;) {
+		char line[500];
+		if (fgets(line,sizeof(line),input_file) == NULL)
+			break;
+
+		uint x_value,y_value;
+		if (sscanf(line,"%u %u",&x_value,&y_value) != 2)
+			continue;
+
+		actual_X[0][nr_of_input_records]=x_value;
+		actual_Y[0][nr_of_input_records]=y_value;
+		nr_of_input_records++;
+		}
+
+	printf("%u records read\n",nr_of_input_records);
+
+		/*******************************/
+		/*****                     *****/
+		/***** Detect N from input *****/
+		/*****                     *****/
+		/*******************************/
+
+	uint N=2;
+	for (;;N++) {
+		if (N > MAX_N) {
+			printf("Unable to deduct square side length from %u\n",
+														nr_of_input_records);
+			return;
+			}
+
+		if (N*N == nr_of_input_records)
+			break;
+		}
+
+	printf("Assuming %ux%u square of measurements\n",N,N);
+	actual_X.set_N(N);
+	actual_Y.set_N(N);
+
+		/**************************************/
+		/*****                            *****/
+		/***** Rotate and normalise input *****/
+		/*****                            *****/
+		/**************************************/
+
+	/*
+	printf("X corners: %.0f %.0f %.0f %.0f\n",actual_X[0][0],actual_X[0][N-1],
+										actual_X[N-1][0],actual_X[N-1][N-1]);
+	printf("Y corners: %.0f %.0f %.0f %.0f\n",actual_Y[0][0],actual_Y[N-1][0],
+										actual_Y[0][N-1],actual_Y[N-1][N-1]);
+	*/
+
+	if ((actual_X[N-1][0]+1)*(actual_Y[N-1][0]+1) <
+									(actual_X[0][0]+1)*(actual_Y[0][0]+1)) {
+		printf("Flipped minor axis\n");
+		actual_X.flip_major_axis();
+		actual_Y.flip_major_axis();
+		}
+
+	if ((actual_X[0][N-1]+1)*(actual_Y[0][N-1]+1) <
+									(actual_X[0][0]+1)*(actual_Y[0][0]+1)) {
+		printf("Flipped major axis\n");
+		actual_X.flip_minor_axis();
+		actual_Y.flip_minor_axis();
+		}
+
+	if (actual_X[N-1][0]*actual_Y[0][N-1] < actual_X[0][N-1]*actual_Y[N-1][0]) {
+		printf("Transposed input table\n");
+		actual_X.transpose();
+		actual_Y.transpose();
+		}
+
+		// now X increases along the major axis and Y along the minor axis
+
+	{ const float X0=actual_X[0][0];
+	const float Y0=actual_Y[0][0];
+
+	for (uint i=0;i < N;i++)
+		for (uint j=0;j < N;j++) {
+			actual_X[i][j]-=X0;
+			actual_Y[i][j]-=Y0;
+			}}
+
+		/*************************************/
+		/*****                           *****/
+		/***** Calculate ideal_X/ideal_Y *****/
+		/*****                           *****/
+		/*************************************/
+
+	table_t ideal_X(actual_X.N),ideal_Y(actual_Y.N);
+
+	{ for (uint i=0;i < N;i++)
+		for (uint j=0;j < N;j++) {
+			ideal_X[i][j]=actual_X[i][0];
+			ideal_Y[i][j]=actual_Y[0][j];
+			}}
+
+		/**********************************/
+		/*****                        *****/
+		/***** Linear only prediction *****/
+		/*****                        *****/
+		/**********************************/
+
+	struct axis_info_t {
+		axis_t axis;
+		const axis_info_t * const other_axis;
+		table_t linear_predicted_table;
+		float linear_only_coeff,linear_only_error;
+		nonlinear_prediction_params_t nonlinear_prediction_params;
+		float nonlinear_error;
+		} axis_info[2]={{{"X",actual_X,ideal_X,&axis_info[1].axis},
+														&axis_info[1],N},
+						{{"Y",actual_Y,ideal_Y,&axis_info[0].axis},
+														&axis_info[0],N}};
+
+	{ for (axis_info_t *a=&axis_info[0];a <= &axis_info[1];a++) {
+		a->linear_only_coeff=optimize_linear_coeff(
+											a->linear_only_error,&a->axis);
+		printf("Linear %s prediction (error without prediction %.1f%%): "
+										"linear coeff %.3f\n",a->axis.name,
+							calculate_error(a->axis.ideal_table,&a->axis),
+													a->linear_only_coeff);
+
+		printf("Linear prediction error map (%.3f%% average error):\n",a->linear_only_error);
+		predict_linear_only(a->linear_only_coeff,a->linear_predicted_table,
+																	&a->axis);
+		print_error_table(a->linear_predicted_table,&a->axis);
+		}}
+
+		/***************************************/
+		/*****                             *****/
+		/***** Linear+nonlinear prediction *****/
+		/*****                             *****/
+		/***************************************/
+
+	{ for (axis_info_t *a=&axis_info[0];a <= &axis_info[1];a++) {
+		printf("Optimizing nonlinear %s prediction...\n",a->axis.name);
+
+		table_t nonlinear_predicted_table(N);
+
+		a->nonlinear_error=optimize_linear_and_nonlinear(
+					a->nonlinear_prediction_params,nonlinear_predicted_table,
+					&a->axis,a->other_axis->linear_predicted_table);
+
+		printf("Nonlinear %s prediction: linear coeff %.2f  "
+							"sensor level mult %.2f  nonlinear coeff %.2f\n",
+						a->axis.name,
+						a->nonlinear_prediction_params.linear_coeff,
+						a->nonlinear_prediction_params.sensor_level_mult,
+						a->nonlinear_prediction_params.nonlinear_coeff);
+		printf("Nonlinear prediction error map (%.3f%% average error):\n",
+												a->nonlinear_error);
+		print_error_table(nonlinear_predicted_table,&a->axis);
+		}}
+
+		/****************************/
+		/*****                  *****/
+		/***** Print conclusion *****/
+		/*****                  *****/
+		/****************************/
+
+	const uint nonlinear_axis_nr=(
+			(axis_info[0].linear_only_error + axis_info[1].nonlinear_error) <
+			(axis_info[1].linear_only_error + axis_info[0].nonlinear_error)) ?
+																		1 : 0;
+	printf("\nConclusion: predict %s nonlinearly. "
+										"X error %.3f%%, Y error %.3f%%\n",
+			axis_info[nonlinear_axis_nr].axis.name,
+			nonlinear_axis_nr ? axis_info[0].linear_only_error :
+											(axis_info[0].nonlinear_error),
+			(!nonlinear_axis_nr) ? axis_info[1].linear_only_error :
+											(axis_info[1].nonlinear_error));
 	}

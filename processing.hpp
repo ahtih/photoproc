@@ -130,3 +130,5 @@ class color_and_levels_processing_t {
 		//  src: 2.0-gamma 16-bit RGB
 		// dest: 2.2-gamma  8-bit RGB
 	};
+
+void optimize_transfer_matrix(FILE * const input_file);
