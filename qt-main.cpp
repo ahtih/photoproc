@@ -344,6 +344,8 @@ class slider_t : public QHBox {
 								(sint)floor(max_value*100 + 0.5),10,
 								(sint)floor(default_value*100 + 0.5),
 													Qt::Horizontal,this);
+			slider->setFocusPolicy(static_cast<QWidget::FocusPolicy>(
+									QWidget::TabFocus|QWidget::ClickFocus));
 
 			connect(slider,SIGNAL(valueChanged(int)),SLOT(value_changed()));
 			value_changed();
