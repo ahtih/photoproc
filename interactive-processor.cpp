@@ -532,7 +532,21 @@ void interactive_image_processor_t::get_spot_values(
 													uint values_in_file[3])
 {
 	mutex_locker_t req(&image_load_mutex);
-	image_reader.get_spot_values(x_fraction,y_fraction,values_in_file);
+
+	if (!image_reader.img.columns() || !image_reader.img.rows()) {
+		values_in_file[0]=values_in_file[1]=values_in_file[2]=0;
+		return;
+		}
+
+	const sint xsize=((sint)image_reader.img.columns()) -
+								(sint)(params.left_crop + params.right_crop);
+	const sint ysize=((sint)image_reader.img.rows()) -
+								(sint)(params.top_crop + params.bottom_crop);
+
+	image_reader.get_spot_values(
+			(params.left_crop + x_fraction*xsize) / image_reader.img.columns(),
+			(params.top_crop + y_fraction*ysize) / image_reader.img.rows(),
+															values_in_file);
 	}
 
 image_reader_t::shooting_info_t interactive_image_processor_t::
