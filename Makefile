@@ -93,7 +93,7 @@ print-creating-release:
 	@echo
 
 release: print-creating-release $(RELEASE_SOURCES) $(PROG)-static
-	rm -rf $(RELASE_NAME) $(RELASE_NAME).zip $(RELASE_NAME).tar.gz $(RELASE_NAME).spec $(RELASE_NAME)*.rpm $(RELASE_NAME)-linux-static-binary.gz
+	rm -rf $(RELASE_NAME) $(RELASE_NAME).zip $(RELASE_NAME).tar.gz $(RELASE_NAME).spec $(RELASE_NAME)*.rpm $(RELASE_NAME)-linux-i386-static-binary.gz
 	#
 	# Make source .tar.gz and .zip
 	#
@@ -105,7 +105,7 @@ release: print-creating-release $(RELEASE_SOURCES) $(PROG)-static
 	#
 	# Make Linux static binary .gz
 	#
-	cat $(PROG)-static | gzip -cn > $(RELASE_NAME)-linux-static-binary.gz
+	cat $(PROG)-static | gzip -cn > $(RELASE_NAME)-linux-i386-static-binary.gz
 	#
 	# Make SRPM
 	#
@@ -131,5 +131,5 @@ release: print-creating-release $(RELEASE_SOURCES) $(PROG)-static
 	@echo "      " $(RELASE_NAME).zip
 	@echo "      " $(RELASE_NAME).tar.gz
 	@echo "      " $(RELASE_NAME).src.rpm
-	@echo "      " $(RELASE_NAME)-linux-static-binary.gz
+	@echo "      " $(RELASE_NAME)-linux-i386-static-binary.gz
 	@echo "      " $(RELASE_NAME)-static.i386.rpm
