@@ -188,8 +188,7 @@ QString processor_t::start_loading_image(const QString &fname)
 
 	if (fileinfo.extension(FALSE).lower() == "crw") {
 		QStringList args;
-		args << "crw";
-		args << "-d";			// Dillon interpolation
+		args << "dcraw";
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
@@ -434,8 +433,12 @@ class image_window_t : public QMainWindow, public processor_t {
 				suffix=image_fname.mid(suffix_idx);
 
 			for (uint increment=1;increment < 100;increment++) {
+				QString new_number_str=QString::number(number + increment);
+				while (new_number_str.length() < number_str.length())
+					new_number_str="0" + new_number_str;
+
 				const QString new_fname=image_fname.left(number_idx) +
-								QString::number(number + increment) + suffix;
+												new_number_str + suffix;
 
 				if (QFileInfo(new_fname).exists()) {
 					load_image(new_fname);
