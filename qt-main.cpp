@@ -331,7 +331,7 @@ class crop_spin_box_t : public QHBox {
 		{
 			setSpacing(5);
 			new QLabel(QString(name) + ":",this);
-			spinbox=new QSpinBox(0,10*1000,20,this);
+			spinbox=new QSpinBox(0,9999,20,this);
 			}
 
 	uint get_value(void) const { return (uint)spinbox->value(); }
@@ -339,6 +339,7 @@ class crop_spin_box_t : public QHBox {
 
 class image_window_t : public QMainWindow, public processor_t {
 	Q_OBJECT
+	protected:
 
 	QString image_fname;
 
@@ -354,13 +355,17 @@ class image_window_t : public QMainWindow, public processor_t {
 	QCheckBox *grayscale_checkbox;
 
 	QHBox *crop_view_hbox;
+	QComboBox *crop_target_combobox;
 	QLabel *crop_info_qlabel;
 	crop_spin_box_t *top_crop,*bottom_crop,*left_crop,*right_crop;
 
 	void set_recent_images_in_file_menu(void);
 	void save_window_pos(void);
 
-	protected:
+	static const struct output_dimensions_t {
+		const char *name;
+		vec<uint> dimensions;
+		} output_dimensions[];
 
 	virtual bool event(QEvent *e);
 	virtual void moveEvent(QMoveEvent *e)
@@ -469,23 +474,29 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	void update_crop_view_label(void)
 		{
+			if (image_fname.isEmpty()) {
+				crop_info_qlabel->setText("");
+				return;
+				}
+
 			const vec<uint> image_size=processor.get_image_size();
 
-			vec<uint> target_size=
-									{3570,2516};	// Frontier A4
-									// {2752,1830};	// Frontier 15x23 !!!
-									// {1818,1228};	// Frontier 10x15 !!!
+			vec<uint> target_size=output_dimensions[
+							crop_target_combobox->currentItem()].dimensions;
 
 			if ((image_size.y > image_size.x) !=
 								(target_size.y > target_size.x))
 				target_size.exchange_components();
 
 			char buf[200];
-			sprintf(buf,"%ux%u %+.2f%%",image_size.x,image_size.y,
+			sprintf(buf,"%+.2f%% %ux%u",
 							(image_size.x*target_size.y /
-							(float)(image_size.y*target_size.x) - 1) * 100);
+							(float)(image_size.y*target_size.x) - 1) * 100,
+												image_size.x,image_size.y);
 			crop_info_qlabel->setText(buf);
 			}
+
+	void target_dimensions_changed(void);
 
 	void select_normal_view(void)
 		{
@@ -522,6 +533,12 @@ class image_window_t : public QMainWindow, public processor_t {
 	image_window_t(QApplication * const app);
 	void load_window_pos(void);
 	};
+
+const image_window_t::output_dimensions_t image_window_t::output_dimensions[]={
+		{"A4 Frontier",		{3570,2516}},
+		{"15x23 Frontier",	{2752,1830}},
+		{"10x15 Frontier",	{1818,1228}},
+		};
 
 void image_widget_t::ensure_correct_size(void)
 {
@@ -661,18 +678,36 @@ image_window_t::image_window_t(QApplication * const app) :
 	crop_view_hbox=new QHBox(qhbox);
 	crop_view_hbox->setSpacing(10);
 
+	crop_target_combobox=new QComboBox((bool)0,crop_view_hbox);
+	crop_target_combobox->setMinimumWidth(100);
+
+	{ const QString selected_target_dimensions=settings.readEntry(
+								SETTINGS_PREFIX "selected_target_dimensions");
+
+	for (uint i=0;i < lenof(output_dimensions);i++) {
+		const QString name=QString(output_dimensions[i].name);
+		crop_target_combobox->insertItem(name +
+			" (" + QString::number(output_dimensions[i].dimensions.x) +
+			"x"  + QString::number(output_dimensions[i].dimensions.y) + ")");
+		if (name == selected_target_dimensions)
+			crop_target_combobox->setCurrentItem(i);
+		}}
+
+	connect(crop_target_combobox,SIGNAL(activated(int)),
+									SLOT(target_dimensions_changed(void)));
+
 	crop_info_qlabel=new QLabel(crop_view_hbox);
 
-	top_crop=new crop_spin_box_t(crop_view_hbox,"Top crop");
+	top_crop=new crop_spin_box_t(crop_view_hbox,"Crop: Top");
 	connect(top_crop->spinbox,SIGNAL(valueChanged(int)),
 												SLOT(crop_params_changed()));
-	bottom_crop=new crop_spin_box_t(crop_view_hbox,"Bottom crop");
+	bottom_crop=new crop_spin_box_t(crop_view_hbox,"Bottom");
 	connect(bottom_crop->spinbox,SIGNAL(valueChanged(int)),
 												SLOT(crop_params_changed()));
-	left_crop=new crop_spin_box_t(crop_view_hbox,"Left crop");
+	left_crop=new crop_spin_box_t(crop_view_hbox,"Left");
 	connect(left_crop->spinbox,SIGNAL(valueChanged(int)),
 												SLOT(crop_params_changed()));
-	right_crop=new crop_spin_box_t(crop_view_hbox,"Right crop");
+	right_crop=new crop_spin_box_t(crop_view_hbox,"Right");
 	connect(right_crop->spinbox,SIGNAL(valueChanged(int)),
 												SLOT(crop_params_changed()));
 
@@ -713,6 +748,13 @@ image_window_t::image_window_t(QApplication * const app) :
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
 	enable_disable_controls();
+	}
+
+void image_window_t::target_dimensions_changed(void)
+{
+	settings.writeEntry(SETTINGS_PREFIX "selected_target_dimensions",
+				output_dimensions[crop_target_combobox->currentItem()].name);
+	update_crop_view_label();
 	}
 
 void image_window_t::save_window_pos(void)
