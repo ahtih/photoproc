@@ -179,6 +179,25 @@ class processor_t :
 			if (info.focal_length_mm > 0)
 				sprintf(strchr(buf,'\0'),"Focal length: %.0fmm\n",
 													info.focal_length_mm);
+
+			if (info.focused_distance_m_min > 0 ||
+											info.focused_distance_m_max > 0) {
+				sprintf(strchr(buf,'\0'),"Focused to: ");
+
+				char min_dist[100],max_dist[100];
+				sprintf(min_dist,"%.1fm",max(0,info.focused_distance_m_min));
+
+				if (info.focused_distance_m_max > 0)
+					sprintf(max_dist,"%.1fm",info.focused_distance_m_max);
+				  else
+					sprintf(max_dist,"inf");
+
+				if (!strcmp(min_dist,max_dist))
+					sprintf(strchr(buf,'\0'),"%s\n",min_dist);
+				  else
+					sprintf(strchr(buf,'\0'),"%s..%s\n",min_dist,max_dist);
+				}
+
 			return buf;
 			}
 	};

@@ -47,10 +47,12 @@ class image_reader_t {
 		float aperture;			// 2.8, 5.6 etc
 		float exposure_time;	// value in seconds
 		float focal_length_mm;
+		float focused_distance_m_min,focused_distance_m_max;
 		char camera_type[100];
 
 		void clear(void) { camera_type[0]='\0'; ISO_speed=0;
-							aperture=exposure_time=focal_length_mm=-1; }
+							aperture=exposure_time=focal_length_mm=-1;
+							focused_distance_m_min=focused_distance_m_max=-1; }
 		shooting_info_t(void) { clear(); }
 		};
 	shooting_info_t shooting_info;

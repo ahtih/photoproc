@@ -216,6 +216,15 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 			{ const sint code=read_sshort(fd,tag_offset + 4+2+2+2);
 			shooting_info.exposure_time=
 							1/(2000 * pow(2,(code - (float)0x160)/0x20)); }
+
+			if (tag_len >= 38+2+2) {
+				{ const uint code=read_uint(fd,2,tag_offset + 38);
+				if (code < 0xffffU)
+					shooting_info.focused_distance_m_max=code / 100.0; }
+				{ const uint code=read_uint(fd,2,tag_offset + 38+2);
+				if (code < 0xffffU)
+					shooting_info.focused_distance_m_min=code / 100.0; }
+				}
 			}
 
 		if (tag_type == 0x5029)
