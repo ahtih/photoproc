@@ -30,7 +30,7 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 	public:
 
 	enum operation_type_t {LOAD_FILE=0,LOAD_FROM_MEMORY,
-											PROCESSING,FULLRES_PROCESSING};
+			LOAD_FROM_MEMORY_AND_DELETE_FILE,PROCESSING,FULLRES_PROCESSING};
 	struct notification_receiver_t {
 		virtual void operation_completed(void)=0;
 			// called in interactive_image_processor_t's thread

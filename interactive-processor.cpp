@@ -257,10 +257,15 @@ void interactive_image_processor_t::run(void)
 			mutex_locker_t req(&image_load_mutex);
 			image_reader.load_file(packet->fname);
 			}
-		if (packet->operation_type == LOAD_FROM_MEMORY) {
+		if (packet->operation_type == LOAD_FROM_MEMORY ||
+				packet->operation_type == LOAD_FROM_MEMORY_AND_DELETE_FILE) {
 			mutex_locker_t req(&image_load_mutex);
+
 			image_reader.load_from_memory(packet->param_ptr,
 									packet->param_uint,packet->fname);
+
+			if (packet->operation_type == LOAD_FROM_MEMORY_AND_DELETE_FILE)
+				unlink(packet->fname);
 			}
 		else
 		if (packet->operation_type == PROCESSING)
@@ -291,7 +296,8 @@ uint interactive_image_processor_t::get_operation_results(
 	error_text=result->error_text;
 
 	operation_pending_count--;
-	if (operation_type == LOAD_FILE || operation_type == LOAD_FROM_MEMORY) {
+	if (operation_type == LOAD_FILE || operation_type == LOAD_FROM_MEMORY ||
+						operation_type == LOAD_FROM_MEMORY_AND_DELETE_FILE) {
 		is_file_loaded=(error_text == NULL);
 		if (is_file_loaded)
 			ensure_processing_level(PASS1);
