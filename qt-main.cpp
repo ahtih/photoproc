@@ -501,6 +501,10 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	QString image_fname;
 	QString spot_values_clipboard;
+	QString start_fullres_processing_fname;	// empty if fullres processing
+											//    request is not pending
+	uint fullres_processing_do_resize;		// 0 or 1
+	uint fullres_processing_do_USM;			// 0 or 1
 
 	QPopupMenu file_menu;
 	image_widget_t *image_widget;
@@ -739,6 +743,19 @@ class image_window_t : public QMainWindow, public processor_t {
 		{
 			ensure_fullres_loaded_image();
 
+			start_fullres_processing_fname=fname;
+			fullres_processing_do_resize=do_resize;
+			fullres_processing_do_USM=do_unsharp_mask;
+
+			if (is_external_reader_process_running())
+				return;		// if the process is running, then load operation
+							//   might not yet have started in processor_t,
+							//   and therefore we need to wait so that we
+							//   don't start our operation before the image
+							//   load operation
+
+			start_fullres_processing_fname=QString::null;
+
 			vec<uint> resize_size={0,0};
 			if (do_resize)
 				resize_size=output_dimensions[
@@ -854,7 +871,9 @@ void image_widget_t::resizeEvent(QResizeEvent *)
 	}
 
 image_window_t::image_window_t(QApplication * const app) :
-		QMainWindow(NULL,"image_window"), processor_t(this), file_menu(this)
+			QMainWindow(NULL,"image_window"), processor_t(this),
+			fullres_processing_do_resize(0), fullres_processing_do_USM(0),
+			file_menu(this)
 {
 	QVBox * const qvbox=new QVBox(this);
 	setCentralWidget(qvbox);
@@ -1261,6 +1280,9 @@ bool image_window_t::event(QEvent *e)
 
 		// operation_completed() event
 
+	if (!start_fullres_processing_fname.isEmpty())
+		start_fullres_processing(start_fullres_processing_fname,
+					fullres_processing_do_resize,fullres_processing_do_USM);
 	set_caption();
 
 	interactive_image_processor_t::operation_type_t operation_type;
