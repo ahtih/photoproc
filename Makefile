@@ -36,10 +36,14 @@ all: $(PROG)
 $(PROG): $(MOCS) $(OBJS)
 	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
 
-STATIC_QTDIR ?= $(QTDIR)
-
-# Qt for photoproc static linking can be built with:
-# (build requires 550Mb disk space, install requires 75Mb)
+# The idea of photoproc static linking is somewhat limited, because
+# ImageMagick does not lend itself well to static linking -- it requires
+# its configuration files to be present in filesystem, thus ImageMagick
+# pretty much needs to be installed anyway to use photoproc. As a result, Qt
+# (and things it requires) is the only component that we can link statically.
+#
+# We look for static Qt in $STATIC_QTDIR. Qt for photoproc static linking
+# can be built with: (build requires 550Mb disk space, install requires 75Mb)
 #
 # QTDIR=`pwd` ./configure -no-xrandr -no-xcursor -no-ipv6 -no-cups -no-nis
 #			-no-xrender -no-xft -no-xinerama -no-sm
@@ -48,6 +52,8 @@ STATIC_QTDIR ?= $(QTDIR)
 #			-disable-sql -system-zlib
 #			-static -thread -prefix $STATIC_QTDIR
 # QTDIR=`pwd` SUBLIBS="-lpng -ljpeg" make
+
+STATIC_QTDIR ?= $(QTDIR)
 
 $(PROG)-static: GCCLIB_DIR=$(shell dirname `$(CPP) --print-libgcc-file-name`)
 $(PROG)-static: QTDIR=$(STATIC_QTDIR)
