@@ -48,6 +48,7 @@ class external_reader_process_t : public QProcess {
 
 	interactive_image_processor_t * const processor;
 	QObject * const notification_receiver;
+	const interactive_image_processor_t::operation_type_t operation_type;
 	QString shooting_info_fname;
 
 	void *buf;
@@ -75,8 +76,7 @@ class external_reader_process_t : public QProcess {
 		{
 			read_more_data();
 
-			processor->start_operation(
-				interactive_image_processor_t::LOAD_FROM_MEMORY,
+			processor->start_operation(operation_type,
 								shooting_info_fname.latin1(),buf,buf_used_len);
 			buf=NULL;
 			is_finished=1;
@@ -99,10 +99,15 @@ class external_reader_process_t : public QProcess {
 
 	external_reader_process_t(interactive_image_processor_t * const _processor,
 				QObject * const _notification_receiver,const QStringList &args,
-					const QString &_shooting_info_fname=(const char *)NULL) :
+				interactive_image_processor_t::operation_type_t
+															_operation_type=
+							interactive_image_processor_t::LOAD_FROM_MEMORY,
+				const QString &_shooting_info_fname=(const char *)NULL) :
+
 				QProcess(args,NULL,"external image reader process"),
 				processor(_processor),
 				notification_receiver(_notification_receiver),
+				operation_type(_operation_type),
 				buf(NULL), buf_len(0), buf_used_len(0), is_finished(0)
 		{
 			if (_shooting_info_fname != NULL)
@@ -132,6 +137,10 @@ class processor_t :
 	public:
 
 	interactive_image_processor_t processor;
+	QByteArray image_file_data;		// only nonempty if the currently loaded
+									//   image was loaded with half-res;
+									//   in this case we need image_file_data
+									//   for later full-res loading
 
 	uint is_external_reader_process_running(void) const
 		{
@@ -153,7 +162,8 @@ class processor_t :
 							external_reader_process(NULL), processor(this) {}
 	virtual ~processor_t(void) { delete_external_reader_process(); }
 
-	QString start_loading_image(const QString &fname);
+	QString start_loading_image(const QString &fname,const uint load_fullres,
+									const QString &temp_fname=QString::null);
 		// returns error text, or null string if no error
 
 	QString get_shooting_info_text(void)
@@ -204,19 +214,25 @@ class processor_t :
 			}
 	};
 
-QString processor_t::start_loading_image(const QString &fname)
+QString processor_t::start_loading_image(const QString &fname,
+						const uint load_fullres,const QString &temp_fname)
 {		// returns error text, or null string if no error
 
-	const QFileInfo fileinfo(fname);
+	const QString actual_fname_to_load=temp_fname.isEmpty() ?
+														fname : temp_fname;
+	const QFileInfo fileinfo(actual_fname_to_load);
 
-	if (fname.isEmpty() || !fileinfo.exists()) {
+	if (actual_fname_to_load.isEmpty() || !fileinfo.exists()) {
 		QString str;
-		return str.sprintf("File %s not found",fname.utf8().data());
+		return str.sprintf("File %s not found",
+										actual_fname_to_load.utf8().data());
 		}
+
+	image_file_data.resize(0);
 
 		// start loading image
 
-	const QString ext=fileinfo.extension(FALSE).lower();
+	const QString ext=QFileInfo(fname).extension(FALSE).lower();
 	if (ext == "nef" || ext == "crw" || ext == "x-canon-raw" ||
 						ext == "mrw" || ext == "orf" || ext == "dcr") {
 		QStringList args;
@@ -224,7 +240,20 @@ QString processor_t::start_loading_image(const QString &fname)
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
-		args << fname;
+
+		if (!load_fullres) {
+			args << "-h";			// half-res image for fast processing
+
+			QFile f(actual_fname_to_load);
+			if (!f.open(IO_Raw|IO_ReadOnly)) {
+				QString str;
+				return str.sprintf("Error opening file %s",
+										actual_fname_to_load.utf8().data());
+				}
+			image_file_data=f.readAll();
+			}
+
+		args << actual_fname_to_load;
 
 		/*	formula to convert exposure and white level values from old
 			"2.4x brightness 0.4 invariant density" system to current system:
@@ -235,7 +264,12 @@ QString processor_t::start_loading_image(const QString &fname)
 			*/
 
 		external_reader_process=new external_reader_process_t(
-								&processor,notification_receiver,args,fname);
+						&processor,notification_receiver,args,
+						temp_fname.isEmpty() ?
+							interactive_image_processor_t::LOAD_FROM_MEMORY :
+							interactive_image_processor_t::
+											LOAD_FROM_MEMORY_AND_DELETE_FILE,
+						actual_fname_to_load);
 
 		if (!external_reader_process->launch()) {
 			delete external_reader_process;
@@ -252,7 +286,8 @@ QString processor_t::start_loading_image(const QString &fname)
 		}
 	  else
 		processor.start_operation(interactive_image_processor_t::LOAD_FILE,
-															fname.latin1());
+											actual_fname_to_load.latin1());
+
 	return QString();
 	}
 
@@ -526,7 +561,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	public slots:
 
 	void load_image(const QString &fname);
-	void enable_disable_controls(void);
+	void set_caption(void);
 	void check_processing(void);
 	void color_and_levels_params_changed(void);
 	void crop_params_changed(void);
@@ -692,9 +727,13 @@ class image_window_t : public QMainWindow, public processor_t {
 								QMessageBox::Ok,QMessageBox::NoButton);
 			}
 
+	void ensure_fullres_loaded_image(void);
+
 	void start_fullres_processing(const QString fname,const uint do_resize,
 												const uint do_unsharp_mask)
 		{
+			ensure_fullres_loaded_image();
+
 			vec<uint> resize_size={0,0};
 			if (do_resize)
 				resize_size=output_dimensions[
@@ -706,7 +745,7 @@ class image_window_t : public QMainWindow, public processor_t {
 
 			processor.start_operation(interactive_image_processor_t::
 										FULLRES_PROCESSING,fname.latin1());
-			enable_disable_controls();
+			set_caption();
 			}
 
 	public:
@@ -955,7 +994,7 @@ image_window_t::image_window_t(QApplication * const app) :
 
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
-	enable_disable_controls();
+	set_caption();
 	}
 
 file_save_options_dialog_t::file_save_options_dialog_t(
@@ -1055,13 +1094,65 @@ void image_window_t::set_recent_images_in_file_menu(void)
 		}
 	}
 
+void image_window_t::ensure_fullres_loaded_image(void)
+{
+	if (!image_file_data.count() || image_fname.isEmpty())
+		return;
+
+	sint fd=-1;
+	char temp_fname[1000];
+
+	const char * const env_tmpdir=getenv("TMPDIR");
+	if (env_tmpdir != NULL) {
+		strcpy(temp_fname,env_tmpdir);
+		if (strlen(temp_fname))
+			if (temp_fname[strlen(temp_fname)-1] != '/')
+				strcat(temp_fname,"/");
+		strcat(temp_fname,"photoproc-temp-XXXXXX");
+		fd=mkstemp(temp_fname);
+		}
+#ifdef P_tmpdir
+	if (fd < 0) {
+		strcpy(temp_fname,P_tmpdir "/" "photoproc-temp-XXXXXX");
+		fd=mkstemp(temp_fname);
+		}
+#endif
+	if (fd < 0) {
+		strcpy(temp_fname,"/tmp/" "photoproc-temp-XXXXXX");
+		fd=mkstemp(temp_fname);
+		}
+
+	if (fd >= 0) {
+		if (write(fd,image_file_data.data(),image_file_data.count()) ==
+											(sint)image_file_data.count()) {
+			::close(fd);
+			image_file_data.resize(0);
+			start_loading_image(image_fname,1,temp_fname);
+			set_caption();
+			return;
+			}
+		::close(fd);
+		}
+
+	image_file_data.resize(0);
+	QMessageBox::warning(this,MESSAGE_BOX_CAPTION,
+						QString("Could not write temp file ") + temp_fname +
+							" for re-loading the image in full resolution. "
+							"The image remains loaded in half resolution",
+							QMessageBox::Ok,QMessageBox::NoButton);
+	}
+
 void image_window_t::load_image(const QString &fname)
 {
 	if (processor.operation_pending_count ||
 									is_external_reader_process_running())
 		return;
 
-	const QString error_text=start_loading_image(fname);
+	const uint window_pixels=size().width() * size().height();
+	const uint file_size=QFileInfo(fname).size();
+
+	const QString error_text=start_loading_image(fname,
+												window_pixels > file_size/3);
 	if (!error_text.isNull()) {
 		QMessageBox::warning(this,MESSAGE_BOX_CAPTION,error_text,
 								QMessageBox::Ok,QMessageBox::NoButton);
@@ -1069,7 +1160,7 @@ void image_window_t::load_image(const QString &fname)
 		}
 
 	image_fname=fname;
-	enable_disable_controls();
+	set_caption();
 
 		// update recent images list
 
@@ -1107,6 +1198,7 @@ void image_window_t::load_image(const QString &fname)
 
 void image_window_t::crop_params_changed(void)
 {
+	ensure_fullres_loaded_image();
 	processor.set_crop(	top_crop->get_value(),
 						bottom_crop->get_value(),
 						left_crop->get_value(),
@@ -1134,7 +1226,7 @@ void image_window_t::color_and_levels_params_changed(void)
 	check_processing();
 	}
 
-void image_window_t::enable_disable_controls(void)
+void image_window_t::set_caption(void)
 {
 	const char * status=processor.operation_pending_count ?
 												"processing..." : "idle";
@@ -1150,15 +1242,17 @@ void image_window_t::check_processing(void)
 	if (processor.operation_pending_count)
 		return;
 
-	if (!is_external_reader_process_running())
+	if (!is_external_reader_process_running()) {
 		delete_external_reader_process();
 
-	image_widget->ensure_correct_size();
+		image_widget->ensure_correct_size();
 
-	if (processor.is_processing_necessary && processor.is_file_loaded)
-		processor.start_operation(interactive_image_processor_t::PROCESSING);
+		if (processor.is_processing_necessary && processor.is_file_loaded)
+			processor.start_operation(
+								interactive_image_processor_t::PROCESSING);
+		}
 
-	enable_disable_controls();
+	set_caption();
 	}
 
 bool image_window_t::event(QEvent *e)
@@ -1168,7 +1262,7 @@ bool image_window_t::event(QEvent *e)
 
 		// operation_completed() event
 
-	enable_disable_controls();
+	set_caption();
 
 	interactive_image_processor_t::operation_type_t operation_type;
 	char *error_text;
@@ -1201,7 +1295,7 @@ class print_file_info_t : public QObject, public processor_t {
 				return;
 				}
 
-			const QString error_text=start_loading_image(fnames.first());
+			const QString error_text=start_loading_image(fnames.first(),0);
 			if (!error_text.isNull()) {
 				fprintf(stderr,"%s\n",error_text.latin1());
 				QApplication::exit(EXIT_FAILURE);
