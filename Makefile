@@ -3,8 +3,8 @@ CPP_SRCS = processing.cpp interactive-processor.cpp
 
 PROG = photoproc
 
-CFLAGS += -O2
-CFLAGS += -Wall -fno-for-scope
+CFLAGS += -O3 -fomit-frame-pointer
+CFLAGS += -Wall
 CFLAGS += -D_GNU_SOURCE -D_THREAD_SAFE -enable-threads
 
 CFLAGS += -I$(QTDIR)/include -I$(QTDIR)/mkspecs/default -I/usr/include/freetype2
