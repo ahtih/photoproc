@@ -508,6 +508,8 @@ void interactive_image_processor_t::draw_processing_curve(const params_t par) co
 void interactive_image_processor_t::do_fullres_processing(
 							const params_t par,const char * const fname)
 {
+	using namespace MagickLib;	// for MaxRGB, which uses MagickLib::Quantum
+
 	const vec<uint> image_size=get_image_size(&par);
 
 	uchar * const buf=new uchar[image_size.x*image_size.y*3];
