@@ -28,7 +28,7 @@
 #include "processing.hpp"
 #include "interactive-processor.hpp"
 
-#define PHOTOPROC_VERSION			"0.92"
+#define PHOTOPROC_VERSION			"0.93"
 
 #define MESSAGE_BOX_CAPTION 		"photoproc"
 #define SETTINGS_PREFIX				"/photoproc/"
