@@ -9,10 +9,12 @@
 #include <qcolor.h>
 #include <qregexp.h>
 #include <qpixmap.h>
+#include <qlayout.h>
 #include <qlabel.h>
 #include <qslider.h>
 #include <qhbox.h>
 #include <qvbox.h>
+#include <qpushbutton.h>
 #include <qcombobox.h>
 #include <qspinbox.h>
 #include <qcheckbox.h>
@@ -192,7 +194,8 @@ QString processor_t::start_loading_image(const QString &fname)
 
 		// start loading image
 
-	if (fileinfo.extension(FALSE).lower() == "crw") {
+	if (fileinfo.extension(FALSE).lower() == "crw" ||
+		fileinfo.extension(FALSE).lower() == "x-canon-raw") {
 		QStringList args;
 		args << "dcraw";
 		args << "-3";			// 48-bit .psd output
@@ -341,6 +344,46 @@ class crop_spin_box_t : public QHBox {
 	uint get_value(void) const { return (uint)spinbox->value(); }
 	};
 
+class persistent_checkbox_t : public QCheckBox {
+	Q_OBJECT
+
+	QSettings * const settings;
+	QString settings_key;
+
+	public slots:
+
+	void save_state(void)
+		{ settings->writeEntry(settings_key,(int)isChecked()); }
+
+	public:
+	persistent_checkbox_t(const char * const label,QWidget * const parent,
+			QSettings * const _settings,const char * const _settings_key) :
+						QCheckBox(label,parent),
+						settings(_settings), settings_key(_settings_key)
+		{
+			setChecked(settings->readNumEntry(settings_key,0));
+			connect(this,SIGNAL(toggled(bool)),SLOT(save_state(void)));
+			}
+	};
+
+class file_save_options_dialog_t : public QDialog {
+	Q_OBJECT
+
+	image_window_t * const image_window;
+	const QString fname;
+	persistent_checkbox_t *resize_checkbox;
+	persistent_checkbox_t *unsharp_mask_checkbox;
+
+	protected slots:
+
+	void accept(void);
+
+	public:
+
+	file_save_options_dialog_t(image_window_t * const _image_window,
+							const QString _fname,const vec<uint> &resize_size);
+	};
+
 class image_window_t : public QMainWindow, public processor_t {
 	Q_OBJECT
 	protected:
@@ -415,12 +458,12 @@ class image_window_t : public QMainWindow, public processor_t {
 
 			const QString fname=QFileDialog::getSaveFileName(save_fname,
 						"BMP files (*.bmp)",this,"save as dialog","Save As");
+
 			if (fname.isEmpty())
 				return;
 
-			processor.start_operation(interactive_image_processor_t::
-										FULLRES_PROCESSING,fname.latin1());
-			enable_disable_controls();
+			(new file_save_options_dialog_t(this,fname,output_dimensions[
+					crop_target_combobox->currentItem()].dimensions))->exec();
 			}
 
 	void load_recent_image(int menuitem_id)
@@ -528,6 +571,23 @@ class image_window_t : public QMainWindow, public processor_t {
 			QMessageBox::information(this,"Shooting info",
 								get_shooting_info_text(),
 								QMessageBox::Ok,QMessageBox::NoButton);
+			}
+
+	void start_fullres_processing(const QString fname,const uint do_resize,
+												const uint do_unsharp_mask)
+		{
+			vec<uint> resize_size={0,0};
+			if (do_resize)
+				resize_size=output_dimensions[
+							crop_target_combobox->currentItem()].dimensions;
+
+			processor.set_fullres_processing_params(resize_size,
+											do_unsharp_mask ? 2.0f : -1.0f);
+				//!!! add combobox for unsharp mask radius
+
+			processor.start_operation(interactive_image_processor_t::
+										FULLRES_PROCESSING,fname.latin1());
+			enable_disable_controls();
 			}
 
 	public:
@@ -715,6 +775,12 @@ image_window_t::image_window_t(QApplication * const app) :
 	connect(right_crop->spinbox,SIGNAL(valueChanged(int)),
 												SLOT(crop_params_changed()));
 
+		/***********************/
+		/*****             *****/
+		/***** main window *****/
+		/*****             *****/
+		/***********************/
+
 	const uint fixed_height=crop_view_hbox->sizeHint().height();
 	normal_view_hbox->setFixedHeight(fixed_height);
 	color_balance_view_hbox->setFixedHeight(fixed_height);
@@ -752,6 +818,47 @@ image_window_t::image_window_t(QApplication * const app) :
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
 	enable_disable_controls();
+	}
+
+file_save_options_dialog_t::file_save_options_dialog_t(
+				image_window_t * const _image_window,const QString _fname,
+												const vec<uint> &resize_size) :
+						QDialog(_image_window,"file_save_options_dialog_t",
+									TRUE,WDestructiveClose),
+						image_window(_image_window), fname(_fname)
+{
+	setCaption("Image Save options");
+
+	QGridLayout * const grid=new QGridLayout(this,3,2,30,30);
+
+	const QString resize_size_str=QString::number(resize_size.x) + "x" +
+											QString::number(resize_size.y);
+
+	resize_checkbox=new persistent_checkbox_t(
+			"Resize image to " + resize_size_str,this,
+			&image_window->settings,SETTINGS_PREFIX "resize_when_saving");
+	grid->addMultiCellWidget(resize_checkbox,0,0,0,1);
+
+	unsharp_mask_checkbox=new persistent_checkbox_t("Apply Unsharp Mask",
+			this,&image_window->settings,SETTINGS_PREFIX "USM_when_saving");
+	grid->addMultiCellWidget(unsharp_mask_checkbox,1,1,0,1);
+
+	QPushButton * const ok_button=new QPushButton("OK",this);
+	ok_button->setFocus();
+	ok_button->setDefault(TRUE);
+	grid->addWidget(ok_button,2,0);
+	connect(ok_button,SIGNAL(clicked(void)),SLOT(accept(void)));
+
+	QPushButton * const cancel_button=new QPushButton("Cancel",this);
+	grid->addWidget(cancel_button,2,1);
+	connect(cancel_button,SIGNAL(clicked(void)),SLOT(reject(void)));
+	}
+
+void file_save_options_dialog_t::accept(void)
+{
+	image_window->start_fullres_processing(fname,resize_checkbox->isChecked(),
+										unsharp_mask_checkbox->isChecked());
+	QDialog::accept();
 	}
 
 void image_window_t::target_dimensions_changed(void)
