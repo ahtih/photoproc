@@ -844,6 +844,21 @@ bool image_window_t::event(QEvent *e)
 
 class print_file_info_t : public QObject, public processor_t {
     Q_OBJECT
+	QStringList fnames;
+
+	void load_next(void)
+		{
+			if (fnames.isEmpty()) {
+				QApplication::exit();
+				return;
+				}
+
+			const QString error_text=start_loading_image(fnames.first());
+			if (!error_text.isNull()) {
+				fprintf(stderr,"%s\n",error_text.latin1());
+				QApplication::exit(EXIT_FAILURE);
+				}
+			}
 
 	virtual bool event(QEvent *e)
 		{
@@ -859,15 +874,27 @@ class print_file_info_t : public QObject, public processor_t {
 
 			if (!processor.operation_pending_count &&
 									!is_external_reader_process_running()) {
-				printf("%s",get_shooting_info_text().latin1());
-				QApplication::exit();
+				printf("File: %s\n%s",fnames.first().latin1(),
+										get_shooting_info_text().latin1());
+				fnames.remove(fnames.begin());
+
+				if (!fnames.isEmpty())
+					printf("\n");
+
+				load_next();
 				}
 
 			return true;
 			}
 
 	public:
-	print_file_info_t(void) : processor_t(this) {}
+	print_file_info_t(const QStringList &_fnames) :
+									processor_t(this), fnames(_fnames)
+		{
+			load_next();
+			startTimer(300);	// without it, event cycle somehow does not
+								//   work through ssh
+			}
 	};
 
 int main(sint argc,char **argv)
@@ -875,21 +902,15 @@ int main(sint argc,char **argv)
 	QApplication app(argc,argv);
 
 	uint show_only_info=0;
-	QString fname;
+	QStringList fnames;
 	for (uint i=1;i < (uint)app.argc();i++)
 		if (app.argv()[i] == QString("-info"))
 			show_only_info=1;
 		  else
-			fname=app.argv()[i];
+			fnames.append(app.argv()[i]);
 
-	if (show_only_info && !fname.isEmpty()) {
-		print_file_info_t print_file_info;
-		const QString error_text=print_file_info.start_loading_image(fname);
-		if (!error_text.isNull()) {
-			fprintf(stderr,"%s\n",error_text.latin1());
-			return EXIT_FAILURE;
-			}
-
+	if (show_only_info && !fnames.isEmpty()) {
+		print_file_info_t print_file_info(fnames);
 		return app.exec();
 		}
 
@@ -897,8 +918,8 @@ int main(sint argc,char **argv)
 	app.setMainWidget(&main_window);
 	main_window.show();
 
-	if (!fname.isEmpty())
-		main_window.load_image(argv[1]);
+	if (!fnames.isEmpty())
+		main_window.load_image(fnames.first());
 
 	return app.exec();
 	}
