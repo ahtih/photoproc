@@ -230,15 +230,21 @@ class image_widget_t : public QWidget {
 	QImage qimage;
 	QPixmap qpixmap;
 
+	vec<uint> get_image_offset(void) const
+		{
+			const vec<uint> offset={( width()-qpixmap. width()) / 2,
+									(height()-qpixmap.height()) / 2};
+			return offset;
+			}
+
 	void do_bitblt(void)
 		{
-			const uint xoff=( width()-qpixmap. width()) / 2;
-			const uint yoff=(height()-qpixmap.height()) / 2;
+			const vec<uint> offset=get_image_offset();
 
 			erase(QRegion(rect(),QRegion::Rectangle).subtract(
-					QRegion(xoff,yoff,qpixmap.width(),qpixmap.height(),
+					QRegion(offset.x,offset.y,qpixmap.width(),qpixmap.height(),
 											QRegion::Rectangle)));
-			bitBlt(this,xoff,yoff,&qpixmap);
+			bitBlt(this,offset.x,offset.y,&qpixmap);
 			}
 
 	protected:
@@ -555,15 +561,21 @@ void image_widget_t::ensure_correct_size(void)
 
 void image_widget_t::mousePressEvent(QMouseEvent *e)
 {
+	const vec<uint> image_offset=get_image_offset();
+	const vec<sint> pos={	e->x() - (sint)image_offset.x,
+							e->y() - (sint)image_offset.y};
+
+	const vec<double> pos_fraction={pos.x / (double)qpixmap.width(),
+									pos.y / (double)qpixmap.height()};
+
+	if (pos.x < 0 || pos.y < 0 || pos_fraction.x >= 1 || pos_fraction.y >= 1)
+		return;
+
 	uint values_in_file[3];
-	image_window->processor.get_spot_values(
-							e->x() / (float)qpixmap.width(),
-							e->y() / (float)qpixmap.height(),
-							values_in_file);
+	image_window->processor.get_spot_values(pos_fraction.x,pos_fraction.y,
+															values_in_file);
 
-	//!!! this gives wrong results now that qimage.size() != image_widget.size()
-
-	const QRgb screen_rgb=qimage.pixel(e->x(),e->y());
+	const QRgb screen_rgb=qimage.pixel(pos.x,pos.y);
 
 	char buf[200];
 	sprintf(buf,"Values in file: %u/%u/%u\n"
