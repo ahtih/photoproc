@@ -635,8 +635,8 @@ void image_window_t::load_image(const QString &fname)
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
-		args << "-r" << "1.08";	//  red scaling to fix the green hue in clouds
-		args << "-l" << "1.03";	// blue scaling to fix the green hue in clouds
+		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds
+		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds
 		args << fname;
 
 		/*	formula to convert exposure and white level values from old
@@ -653,7 +653,7 @@ void image_window_t::load_image(const QString &fname)
 			external_reader_process=NULL;
 
 			QMessageBox::warning(this,MESSAGE_BOX_CAPTION,
-						"crw reader process could not be started",
+						"external reader process could not be started",
 						QMessageBox::Ok,QMessageBox::NoButton);
 			return;
 			}
