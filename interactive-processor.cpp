@@ -25,6 +25,13 @@
 				[siit saab küsida reakaupa 8-bitises 2.2 gammaga RGB's]
 		*/
 
+class mutex_locker_t {
+	QMutex * const mutex;
+	public:
+	mutex_locker_t(QMutex * const _mutex) : mutex(_mutex) { _mutex->lock(); }
+	~mutex_locker_t(void) { mutex->unlock(); }
+	};
+
 /***************************************************************************/
 /*******************************             *******************************/
 /******************************* SyncQueue:: *******************************/
@@ -35,7 +42,7 @@ SyncQueue::SyncQueue(void) : Head(NULL), Tail(NULL) {}
 
 SyncQueue::~SyncQueue(void)
 {
-	QMutexLocker rm(&mutex);
+	mutex_locker_t rm(&mutex);
 	for (Element *e=Head;e != NULL;) {
 		Element *n=e->Next;
 		delete [] (char *) e->DataPtr();
@@ -52,7 +59,7 @@ void SyncQueue::Write(const void *ptr,uint len)
 	e->Len=len;
 	e->Next=NULL;
 
-	QMutexLocker rm(&mutex);
+	mutex_locker_t rm(&mutex);
 	if (Tail != NULL) {
 		Tail->Next=e;
 		Tail=e;
@@ -65,7 +72,7 @@ void SyncQueue::Write(const void *ptr,uint len)
 
 void *SyncQueue::Read(uint &len,const uint no_wait)
 {
-	QMutexLocker rm(&mutex);
+	mutex_locker_t rm(&mutex);
 
 	while (1) {
 
@@ -211,11 +218,11 @@ void interactive_image_processor_t::run(void)
 		result.error_text=NULL;
 
 		if (packet->operation_type == LOAD_FILE) {
-			QMutexLocker req(&image_load_mutex);
+			mutex_locker_t req(&image_load_mutex);
 			image_reader.load_file(packet->fname);
 			}
 		if (packet->operation_type == LOAD_FROM_MEMORY) {
-			QMutexLocker req(&image_load_mutex);
+			mutex_locker_t req(&image_load_mutex);
 			image_reader.load_from_memory(packet->param_ptr,
 									packet->param_uint,packet->fname);
 			}
@@ -484,7 +491,7 @@ vec<uint> interactive_image_processor_t::get_image_size(const params_t *par)
 	if (par == NULL)
 		par=&params;
 
-	QMutexLocker req(&image_load_mutex);
+	mutex_locker_t req(&image_load_mutex);
 
 	const sint xsize=((sint)image_reader.img.columns()) -
 									(sint)(par->left_crop + par->right_crop);
@@ -500,13 +507,13 @@ void interactive_image_processor_t::get_spot_values(
 							const float x_fraction,const float y_fraction,
 													uint values_in_file[3])
 {
-	QMutexLocker req(&image_load_mutex);
+	mutex_locker_t req(&image_load_mutex);
 	image_reader.get_spot_values(x_fraction,y_fraction,values_in_file);
 	}
 
 image_reader_t::shooting_info_t interactive_image_processor_t::
 												get_shooting_info(void)
 {
-	QMutexLocker req(&image_load_mutex);
+	mutex_locker_t req(&image_load_mutex);
 	return image_reader.shooting_info;
 	}
