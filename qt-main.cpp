@@ -650,7 +650,7 @@ class image_window_t : public QMainWindow, public processor_t {
 			if (suffix_idx >= 0)
 				suffix=image_fname.mid(suffix_idx);
 
-			for (uint increment=1;increment < 100;increment++) {
+			for (uint increment=1;increment < 500;increment++) {
 				QString new_number_str=QString::number(number + increment);
 				while (new_number_str.length() < number_str.length())
 					new_number_str="0" + new_number_str;
