@@ -245,6 +245,14 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 						strcpy(shooting_info.camera_type,camera_name);
 					}
 				}
+
+			if (!strcmp(shooting_info.camera_type,"Canon EOS D30") ||
+				!strcmp(shooting_info.camera_type,"Canon EOS D60") ||
+				!strcmp(shooting_info.camera_type,"Canon EOS 10D") ||
+				!strcmp(shooting_info.camera_type,"Canon EOS 20D")) {
+				shooting_info.frame_size_mm.x=22.7;
+				shooting_info.frame_size_mm.y=15.1;
+				}
 			}
 
 		if ((tag_type >> 8) == 0x30 || (tag_type >> 8) == 0x28)

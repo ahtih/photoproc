@@ -82,6 +82,7 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 	void draw_gamma_test_image(const params_t par) const;
 	static void resize_line(ushort *dest_p,const uint dest_size,
 							const uint *src_p,const uint src_size);
+	vec<float> get_full_frame_pos_fraction(const vec<float> pos_fraction);
 	public:
 
 	uint operation_pending_count;	// 0..
@@ -112,7 +113,11 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 			// returns 0 if no operation results are available
 			// error_text has to be delete []'d by caller
 	vec<uint> get_image_size(const params_t *par=NULL);
-	void get_spot_values(const float x_fraction,const float y_fraction,
+	void get_spot_values(const vec<float> pos_fraction,
 													uint values_in_file[3]);
+	uint get_rectilinear_angles(const vec<float> pos_fraction,
+										vec<float> &dest_angles_in_degrees);
+			// returns nonzero and sets dest if angles can be calculated;
+			//   otherwise returns 0
 	image_reader_t::shooting_info_t get_shooting_info(void);
 	};

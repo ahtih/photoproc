@@ -571,9 +571,28 @@ vec<uint> interactive_image_processor_t::get_image_size(const params_t *par)
 	return image_size;
 	}
 
+vec<float> interactive_image_processor_t::get_full_frame_pos_fraction(
+											const vec<float> pos_fraction)
+{
+	vec<float> dest={0.0f,0.0f};
+
+	if (image_reader.img.columns() && image_reader.img.rows()) {
+		const sint xsize=((sint)image_reader.img.columns()) -
+								(sint)(params.left_crop + params.right_crop);
+		const sint ysize=((sint)image_reader.img.rows()) -
+								(sint)(params.top_crop + params.bottom_crop);
+
+		dest.x=(params.left_crop + pos_fraction.x*xsize) /
+												image_reader.img.columns();
+		dest.y=(params.top_crop + pos_fraction.y*ysize) /
+												image_reader.img.rows();
+		}
+
+	return dest;
+	}
+
 void interactive_image_processor_t::get_spot_values(
-							const float x_fraction,const float y_fraction,
-													uint values_in_file[3])
+					const vec<float> pos_fraction,uint values_in_file[3])
 {
 	mutex_locker_t req(&image_load_mutex);
 
@@ -582,15 +601,43 @@ void interactive_image_processor_t::get_spot_values(
 		return;
 		}
 
-	const sint xsize=((sint)image_reader.img.columns()) -
-								(sint)(params.left_crop + params.right_crop);
-	const sint ysize=((sint)image_reader.img.rows()) -
-								(sint)(params.top_crop + params.bottom_crop);
-
+	const vec<float> full_frame_pos_fraction=
+								get_full_frame_pos_fraction(pos_fraction);
+							
 	image_reader.get_spot_values(
-			(params.left_crop + x_fraction*xsize) / image_reader.img.columns(),
-			(params.top_crop + y_fraction*ysize) / image_reader.img.rows(),
-															values_in_file);
+		full_frame_pos_fraction.x,full_frame_pos_fraction.y,values_in_file);
+	}
+
+uint interactive_image_processor_t::get_rectilinear_angles(
+			const vec<float> pos_fraction,vec<float> &dest_angles_in_degrees)
+{			// returns nonzero and sets dest if angles can be calculated;
+			//   otherwise returns 0
+
+	if (!image_reader.img.columns() || !image_reader.img.rows())
+		return 0;
+
+	vec<float> full_frame_pos_fraction=
+								get_full_frame_pos_fraction(pos_fraction);
+
+	full_frame_pos_fraction.x-=0.5;
+	full_frame_pos_fraction.y=0.5 - full_frame_pos_fraction.y;
+
+	if (image_reader.shooting_info.focal_length_mm <= 0 ||
+		image_reader.shooting_info.frame_size_mm.x <= 0 ||
+		image_reader.shooting_info.frame_size_mm.y <= 0)
+		return 0;
+
+	const float radians_to_degrees_coeff=180 / 3.1415926;
+
+	dest_angles_in_degrees.x=radians_to_degrees_coeff * atan2(
+					full_frame_pos_fraction.x *
+					image_reader.shooting_info.frame_size_mm.x,
+								image_reader.shooting_info.focal_length_mm);
+	dest_angles_in_degrees.y=radians_to_degrees_coeff * atan2(
+					full_frame_pos_fraction.y *
+					image_reader.shooting_info.frame_size_mm.y,
+								image_reader.shooting_info.focal_length_mm);
+	return 1;
 	}
 
 image_reader_t::shooting_info_t interactive_image_processor_t::

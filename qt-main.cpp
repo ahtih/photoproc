@@ -735,15 +735,14 @@ void image_widget_t::mousePressEvent(QMouseEvent *e)
 	const vec<sint> pos={	e->x() - (sint)image_offset.x,
 							e->y() - (sint)image_offset.y};
 
-	const vec<double> pos_fraction={pos.x / (double)qpixmap.width(),
-									pos.y / (double)qpixmap.height()};
+	const vec<float> pos_fraction={	pos.x / (float)qpixmap.width(),
+									pos.y / (float)qpixmap.height()};
 
 	if (pos.x < 0 || pos.y < 0 || pos_fraction.x >= 1 || pos_fraction.y >= 1)
 		return;
 
 	uint values_in_file[3];
-	image_window->processor.get_spot_values(pos_fraction.x,pos_fraction.y,
-															values_in_file);
+	image_window->processor.get_spot_values(pos_fraction,values_in_file);
 
 	const QRgb screen_rgb=qimage.pixel(pos.x,pos.y);
 
@@ -753,7 +752,7 @@ void image_widget_t::mousePressEvent(QMouseEvent *e)
 								QString::number(values_in_file[1]) + "\t" +
 								QString::number(values_in_file[2]));
 	  else {
-		char buf[200];
+		char buf[500];
 		sprintf(buf,"Values in file: %u/%u/%u\n"
 					"RGB on screen: %u/%u/%u",	values_in_file[0],
 												values_in_file[1],
@@ -761,6 +760,15 @@ void image_widget_t::mousePressEvent(QMouseEvent *e)
 												qRed(screen_rgb),
 												qGreen(screen_rgb),
 												qBlue(screen_rgb));
+
+		vec<float> rectilinear_angles;
+		if (image_window->processor.get_rectilinear_angles(pos_fraction,
+													rectilinear_angles))
+			sprintf(strchr(buf,'\0'),
+					"\n\nAngle from center: %+.2f\xb0 hor, %+.2f\xb0 ver\n"
+					"(assuming perfect rectilinear lens)",
+								rectilinear_angles.x,rectilinear_angles.y);
+
 		QMessageBox::information(this,MESSAGE_BOX_CAPTION,buf,
 							QMessageBox::Ok,QMessageBox::NoButton);
 		}
