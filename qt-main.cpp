@@ -31,8 +31,197 @@
 
 #define NR_OF_IMAGES_TO_REMEMBER	20
 
+class external_reader_process_t : public QProcess {
+	Q_OBJECT
+
+	interactive_image_processor_t * const processor;
+	QObject * const notification_receiver;
+	QString shooting_info_fname;
+
+	void *buf;
+	uint buf_len;
+	uint buf_used_len;
+
+	public slots:
+
+	void read_more_data(void)
+		{
+			const QByteArray array=readStdout();
+			if (!array.count())
+				return;
+
+			if (buf_used_len + array.count() > buf_len) {
+				buf_len=buf_used_len + array.count() + (4U << 20);
+				buf=realloc(buf,buf_len);
+				}
+
+			memcpy(((char *)buf) + buf_used_len,array.data(),array.count());
+			buf_used_len+=array.count();
+			}
+
+	void process_finished(void)
+		{
+			read_more_data();
+
+			processor->start_operation(
+				interactive_image_processor_t::LOAD_FROM_MEMORY,
+								shooting_info_fname.latin1(),buf,buf_used_len);
+			buf=NULL;
+			is_finished=1;
+
+			if (notification_receiver != NULL)
+				QApplication::postEvent(notification_receiver,
+													new QEvent(QEvent::User));
+			}
+
+	public:
+
+	uint is_finished;
+
+	virtual ~external_reader_process_t(void)
+		{
+			if (buf != NULL) {
+				free(buf);
+				buf=NULL;
+				}
+			}
+
+	external_reader_process_t(interactive_image_processor_t * const _processor,
+				QObject * const _notification_receiver,const QStringList &args,
+					const QString &_shooting_info_fname=(const char *)NULL) :
+				QProcess(args,NULL,"external image reader process"),
+				processor(_processor),
+				notification_receiver(_notification_receiver),
+				buf(NULL), buf_len(0), buf_used_len(0), is_finished(0)
+		{
+			if (_shooting_info_fname != NULL)
+				shooting_info_fname=_shooting_info_fname;
+
+			setCommunication(QProcess::Stdout | QProcess::Stderr);
+
+			connect(this,SIGNAL(readyReadStdout()),SLOT(read_more_data()));
+			connect(this,SIGNAL(processExited()),SLOT(process_finished()));
+			}
+
+	uint launch(void) { return QProcess::launch(""); }
+	};
+
+class processor_t :
+			private interactive_image_processor_t::notification_receiver_t {
+	QObject * const notification_receiver;
+	external_reader_process_t *external_reader_process;
+							// NULL if no external_reader_process in progress
+
+	virtual void operation_completed(void)
+		{			// called in interactive_image_processor_t's thread
+			if (notification_receiver != NULL)
+				QApplication::postEvent(notification_receiver,
+													new QEvent(QEvent::User));
+			}
+
+	public:
+
+	interactive_image_processor_t processor;
+
+	uint is_external_reader_process_running(void) const
+		{
+			if (external_reader_process == NULL)
+				return 0;
+			return !external_reader_process->is_finished;
+			}
+
+	void delete_external_reader_process(void)
+		{
+			if (external_reader_process != NULL) {
+				delete external_reader_process;
+				external_reader_process=NULL;
+				}
+			}
+
+	processor_t(QObject * const _notification_receiver=NULL) :
+							notification_receiver(_notification_receiver),
+							external_reader_process(NULL), processor(this) {}
+	virtual ~processor_t(void) { delete_external_reader_process(); }
+
+	QString start_loading_image(const QString &fname);
+		// returns error text, or null string if no error
+
+	QString get_shooting_info_text(void)
+		{
+			const image_reader_t::shooting_info_t info=
+											processor.get_shooting_info();
+			char buf[500];
+
+			*buf='\0';
+			if (info.ISO_speed)
+				sprintf(strchr(buf,'\0'),"ISO speed: %u\n",info.ISO_speed);
+			if (info.aperture > 0)
+				sprintf(strchr(buf,'\0'),"Aperture: f/%.1f\n",info.aperture);
+			if (info.exposure_time > 0) {
+				if (info.exposure_time <= 0.5)
+					sprintf(strchr(buf,'\0'),"Exposure: 1/%.0f\n",
+												1 / info.exposure_time);
+				  else
+					sprintf(strchr(buf,'\0'),"Exposure: %.1f sec\n",
+												info.exposure_time);
+				}
+
+			if (info.focal_length_mm > 0)
+				sprintf(strchr(buf,'\0'),"Focal length: %.0fmm\n",
+													info.focal_length_mm);
+			return buf;
+			}
+	};
+
+QString processor_t::start_loading_image(const QString &fname)
+{		// returns error text, or null string if no error
+
+	const QFileInfo fileinfo(fname);
+
+	if (fname.isEmpty() || !fileinfo.exists()) {
+		char buf[800];
+		sprintf(buf,"File %s not found",fname.latin1());
+		return buf;
+		}
+
+		// start loading image
+
+	if (fileinfo.extension(FALSE).lower() == "crw") {
+		QStringList args;
+		args << "crw";
+		args << "-d";			// Dillon interpolation
+		args << "-3";			// 48-bit .psd output
+		args << "-c";			// output to stdout
+		args << "-b" << "3.8";	// 3.8x brightness
+		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds
+		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds
+		args << fname;
+
+		/*	formula to convert exposure and white level values from old
+			"2.4x brightness 0.4 invariant density" system to current system:
+
+			exposure_stops=3.32 * (exposure_D - 0.4 + 0.2/contrast)
+			white_stops=3.32 * white_D
+
+			*/
+
+		external_reader_process=new external_reader_process_t(
+								&processor,notification_receiver,args,fname);
+
+		if (!external_reader_process->launch()) {
+			delete external_reader_process;
+			external_reader_process=NULL;
+
+			return "external reader process could not be started";
+			}
+		}
+	  else
+		processor.start_operation(interactive_image_processor_t::LOAD_FILE,
+															fname.latin1());
+	return QString();
+	}
+
 class image_window_t;
-class external_reader_process_t;
 
 class image_widget_t : public QWidget {
     Q_OBJECT
@@ -141,12 +330,10 @@ class crop_spin_box_t : public QHBox {
 	uint get_value(void) const { return (uint)spinbox->value(); }
 	};
 
-class image_window_t : public QMainWindow,
-			private interactive_image_processor_t::notification_receiver_t {
+class image_window_t : public QMainWindow, public processor_t {
 	Q_OBJECT
 
 	QString image_fname;
-	external_reader_process_t *external_reader_process;	// NULL if no external_reader_process in progress
 
 	QPopupMenu file_menu;
 	image_widget_t *image_widget;
@@ -163,7 +350,6 @@ class image_window_t : public QMainWindow,
 	QLabel *crop_info_qlabel;
 	crop_spin_box_t *top_crop,*bottom_crop,*left_crop,*right_crop;
 
-	virtual void operation_completed(void);
 	void set_recent_images_in_file_menu(void);
 
 	protected:
@@ -301,34 +487,13 @@ class image_window_t : public QMainWindow,
 
 	void shooting_info_dialog(void)
 		{
-			const image_reader_t::shooting_info_t info=
-											processor.get_shooting_info();
-			char buf[500];
-
-			*buf='\0';
-			if (info.ISO_speed)
-				sprintf(strchr(buf,'\0'),"ISO speed: %u\n",info.ISO_speed);
-			if (info.aperture > 0)
-				sprintf(strchr(buf,'\0'),"Aperture: f/%.1f\n",info.aperture);
-			if (info.exposure_time > 0) {
-				if (info.exposure_time <= 0.5)
-					sprintf(strchr(buf,'\0'),"Exposure: 1/%.0f\n",
-												1 / info.exposure_time);
-				  else
-					sprintf(strchr(buf,'\0'),"Exposure: %.1f sec\n",
-												info.exposure_time);
-				}
-			if (info.focal_length_mm > 0)
-				sprintf(strchr(buf,'\0'),"Focal length: %.0fmm\n",
-													info.focal_length_mm);
-
-			QMessageBox::information(this,"Shooting info",buf,
+			QMessageBox::information(this,"Shooting info",
+								get_shooting_info_text(),
 								QMessageBox::Ok,QMessageBox::NoButton);
 			}
 
 	public:
 
-	interactive_image_processor_t processor;
 	QSettings settings;
 
 	image_window_t(QApplication * const app);
@@ -399,76 +564,8 @@ void image_widget_t::resizeEvent(QResizeEvent *)
 	image_window->check_processing();
 	}
 
-class external_reader_process_t : public QProcess {
-	Q_OBJECT
-
-	image_window_t * const image_window;
-	QString shooting_info_fname;
-
-	void *buf;
-	uint buf_len;
-	uint buf_used_len;
-
-	public slots:
-
-	void read_more_data(void)
-		{
-			const QByteArray array=readStdout();
-			if (!array.count())
-				return;
-
-			if (buf_used_len + array.count() > buf_len) {
-				buf_len=buf_used_len + array.count() + (4U << 20);
-				buf=realloc(buf,buf_len);
-				}
-
-			memcpy(((char *)buf) + buf_used_len,array.data(),array.count());
-			buf_used_len+=array.count();
-			}
-
-	void load_image(void)
-		{
-			read_more_data();
-
-			image_window->processor.start_operation(
-				interactive_image_processor_t::LOAD_FROM_MEMORY,
-								shooting_info_fname.latin1(),buf,buf_used_len);
-			buf=NULL;
-			image_window->enable_disable_controls();
-			}
-
-	public:
-
-	virtual ~external_reader_process_t(void)
-		{
-			if (buf != NULL) {
-				free(buf);
-				buf=NULL;
-				}
-			}
-
-	external_reader_process_t(image_window_t * const _image_window,
-												const QStringList &args,
-					const QString &_shooting_info_fname=(const char *)NULL) :
-				QProcess(args,_image_window,"external image reader process"),
-				image_window(_image_window),
-				buf(NULL), buf_len(0), buf_used_len(0)
-		{
-			if (_shooting_info_fname != NULL)
-				shooting_info_fname=_shooting_info_fname;
-
-			setCommunication(QProcess::Stdout | QProcess::Stderr);
-
-			connect(this,SIGNAL(readyReadStdout()),SLOT(read_more_data()));
-			connect(this,SIGNAL(processExited()),SLOT(load_image()));
-			}
-
-	uint launch(void) { return QProcess::launch(""); }
-	};
-
 image_window_t::image_window_t(QApplication * const app) :
-				QMainWindow(NULL,"image_window"),
-				external_reader_process(NULL), file_menu(this), processor(this)
+		QMainWindow(NULL,"image_window"), processor_t(this), file_menu(this)
 {
 	QVBox * const qvbox=new QVBox(this);
 	setCentralWidget(qvbox);
@@ -613,55 +710,15 @@ void image_window_t::set_recent_images_in_file_menu(void)
 
 void image_window_t::load_image(const QString &fname)
 {
-	if (processor.operation_pending_count || external_reader_process != NULL)
+	if (processor.operation_pending_count ||
+									is_external_reader_process_running())
 		return;
 
-	const QFileInfo fileinfo(fname);
-
-	if (fname.isEmpty() || !fileinfo.exists()) {
-		char buf[800];
-		sprintf(buf,"File %s not found",fname.latin1());
-		QMessageBox::warning(this,MESSAGE_BOX_CAPTION,buf,
-						QMessageBox::Ok,QMessageBox::NoButton);
+	const QString error_text=start_loading_image(fname);
+	if (!error_text.isNull()) {
+		QMessageBox::warning(this,MESSAGE_BOX_CAPTION,error_text,
+								QMessageBox::Ok,QMessageBox::NoButton);
 		return;
-		}
-
-		// start loading image
-
-	if (fileinfo.extension(FALSE).lower() == "crw") {
-		QStringList args;
-		args << "crw";
-		args << "-d";			// Dillon interpolation
-		args << "-3";			// 48-bit .psd output
-		args << "-c";			// output to stdout
-		args << "-b" << "3.8";	// 3.8x brightness
-		args << "-r" << "1.08";	//  red scaling to fix green hue in clouds
-		args << "-l" << "1.03";	// blue scaling to fix green hue in clouds
-		args << fname;
-
-		/*	formula to convert exposure and white level values from old
-			"2.4x brightness 0.4 invariant density" system to current system:
-
-			exposure_stops=3.32 * (exposure_D - 0.4 + 0.2/contrast)
-			white_stops=3.32 * white_D
-
-			*/
-
-		external_reader_process=new external_reader_process_t(this,args,fname);
-		if (!external_reader_process->launch()) {
-			delete external_reader_process;
-			external_reader_process=NULL;
-
-			QMessageBox::warning(this,MESSAGE_BOX_CAPTION,
-						"external reader process could not be started",
-						QMessageBox::Ok,QMessageBox::NoButton);
-			return;
-			}
-		}
-	  else {
-		processor.start_operation(interactive_image_processor_t::LOAD_FILE,
-															fname.latin1());
-		enable_disable_controls();
 		}
 
 	image_fname=fname;
@@ -669,7 +726,9 @@ void image_window_t::load_image(const QString &fname)
 
 		// update recent images list
 
-	{QString recent_images[NR_OF_IMAGES_TO_REMEMBER];
+	{ const QFileInfo fileinfo(fname);
+
+	QString recent_images[NR_OF_IMAGES_TO_REMEMBER];
 	recent_images[0]=fileinfo.absFilePath();
 	uint nr_of_recent_images=1;
 
@@ -731,7 +790,8 @@ void image_window_t::enable_disable_controls(void)
 {
 	const char * status=processor.operation_pending_count ?
 												"processing..." : "idle";
-	if (external_reader_process != NULL && !processor.operation_pending_count)
+	if (!processor.operation_pending_count &&
+										is_external_reader_process_running())
 		status="running external image reader process...";
 
 	setCaption(image_fname + ":  " + status);
@@ -742,10 +802,8 @@ void image_window_t::check_processing(void)
 	if (processor.operation_pending_count)
 		return;
 
-	if (external_reader_process != NULL) {
-		delete external_reader_process;
-		external_reader_process=NULL;
-		}
+	if (!is_external_reader_process_running())
+		delete_external_reader_process();
 
 	image_widget->ensure_correct_size();
 
@@ -761,6 +819,8 @@ bool image_window_t::event(QEvent *e)
 		return QMainWindow::event(e);
 
 		// operation_completed() event
+
+	enable_disable_controls();
 
 	interactive_image_processor_t::operation_type_t operation_type;
 	char *error_text;
@@ -782,21 +842,62 @@ bool image_window_t::event(QEvent *e)
 	return true;
 	}
 
-void image_window_t::operation_completed(void)
-{			// called in interactive_image_processor_t's thread
+class print_file_info_t : public QObject, public processor_t {
+    Q_OBJECT
 
-	QThread::postEvent(this,new QEvent(QEvent::User));
-	}
+	virtual bool event(QEvent *e)
+		{
+			if (e->type() != QEvent::User)
+				return QObject::event(e);
+
+			interactive_image_processor_t::operation_type_t operation_type;
+			char *error_text;
+			while (processor.get_operation_results(operation_type,error_text))
+				;
+
+			//!!! handle errors
+
+			if (!processor.operation_pending_count &&
+									!is_external_reader_process_running()) {
+				printf("%s",get_shooting_info_text().latin1());
+				QApplication::exit();
+				}
+
+			return true;
+			}
+
+	public:
+	print_file_info_t(void) : processor_t(this) {}
+	};
 
 int main(sint argc,char **argv)
 {
 	QApplication app(argc,argv);
 
+	uint show_only_info=0;
+	QString fname;
+	for (uint i=1;i < (uint)app.argc();i++)
+		if (app.argv()[i] == QString("-info"))
+			show_only_info=1;
+		  else
+			fname=app.argv()[i];
+
+	if (show_only_info && !fname.isEmpty()) {
+		print_file_info_t print_file_info;
+		const QString error_text=print_file_info.start_loading_image(fname);
+		if (!error_text.isNull()) {
+			fprintf(stderr,"%s\n",error_text.latin1());
+			return EXIT_FAILURE;
+			}
+
+		return app.exec();
+		}
+
 	image_window_t main_window(&app);
 	app.setMainWidget(&main_window);
 	main_window.show();
 
-	if (argc > 1)
+	if (!fname.isEmpty())
 		main_window.load_image(argv[1]);
 
 	return app.exec();
