@@ -28,6 +28,8 @@
 #include "processing.hpp"
 #include "interactive-processor.hpp"
 
+#define PHOTOPROC_VERSION			"0.92"
+
 #define MESSAGE_BOX_CAPTION 		"photoproc"
 #define SETTINGS_PREFIX				"/photoproc/"
 
@@ -573,6 +575,14 @@ class image_window_t : public QMainWindow, public processor_t {
 								QMessageBox::Ok,QMessageBox::NoButton);
 			}
 
+	void display_help_about(void)
+		{
+			QMessageBox::information(this,"About",
+						"photoproc " PHOTOPROC_VERSION "\n\n"
+						"Written by Ahti Heinla (ahti@ahti.bluemoon.ee)",
+								QMessageBox::Ok,QMessageBox::NoButton);
+			}
+
 	void start_fullres_processing(const QString fname,const uint do_resize,
 												const uint do_unsharp_mask)
 		{
@@ -804,14 +814,18 @@ image_window_t::image_window_t(QApplication * const app) :
 	set_recent_images_in_file_menu();
 	connect(&file_menu,SIGNAL(activated(int)),SLOT(load_recent_image(int)));
 
-	QPopupMenu * const view_menu=new QPopupMenu(this);
+	{ QPopupMenu * const view_menu=new QPopupMenu(this);
 	view_menu->insertItem("&Normal",this,SLOT(select_normal_view()),Key_F5);
 	view_menu->insertItem("Color &Balance",this,
 								SLOT(select_color_balance_view()),Key_F6);
 	view_menu->insertItem("&Crop",this,SLOT(select_crop_view()),Key_F7);
 	view_menu->insertItem("Shooting &Info",this,SLOT(shooting_info_dialog()),CTRL + Key_I);
 
-	menuBar()->insertItem("&View",view_menu);
+	menuBar()->insertItem("&View",view_menu); }
+
+	{ QPopupMenu * const help_menu=new QPopupMenu(this);
+	help_menu->insertItem("&About",this,SLOT(display_help_about()));
+	menuBar()->insertItem("&Help",help_menu); }
 
 	select_normal_view();
 
