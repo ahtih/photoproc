@@ -1,3 +1,17 @@
+Release 0.96	2004-12-13
+	* fixed a nasty bug where images were often saved in
+		half-res/lower quality
+	* In ImageMagick 6.1.x, Unsharp Mask parameter scaling has
+		changed back to how it was in ImageMagick 5; added #ifdef
+		to supply correct arguments for all known ImageMagick
+		versions from 5 to 6.1.6. These parameter changes are
+		very annoying, as Unsharp Mask simply does not work
+		with incorrect arguments
+	* added Unsharp Mask radius selection to file save options dialog
+	* file open/save controls are now greyed out when processing
+		is pending
+	* fixed a memory leak that leaked ca 256k at each image open
+
 Release 0.95	2004-12-11
 	* if image is (approximately) more than 2x larger than our
 		window, and we are loading it using dcraw, then load it
