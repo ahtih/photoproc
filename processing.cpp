@@ -119,7 +119,7 @@ void Lab_to_sRGB_converter_t::convert_to_sRGB(float dest_linear_RGB[3],
 
 class crw_reader_t {
 
-	void clear_vars(void) { rotate_degrees=0; shooting_info.clear(); }
+	void clear_vars(void) { shooting_info.clear(); }
 	uint read_uint(const sint fd,const uint nr_of_bytes);
 	uint read_uint(const sint fd,const uint nr_of_bytes,const uint offset);
 	uint read_sshort(const sint fd,const uint offset);
@@ -128,7 +128,6 @@ class crw_reader_t {
 
 	public:
 
-	sint rotate_degrees;
 	image_reader_t::shooting_info_t shooting_info;
 
 	crw_reader_t(void) { clear_vars(); }
@@ -194,16 +193,6 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 				printf(" %02x",read_uint(fd,1,tag_offset + j));
 		printf("\n"); }
 #endif
-
-		if (tag_type == 0x1810 && tag_len >= 0x0c + 2) {
-			const uint rotate_code=read_uint(fd,2,tag_offset + 0x0c);
-			switch (rotate_code) {
-				case 0x10e:		rotate_degrees=-90;
-								break;
-				case 0x5a:		rotate_degrees=+90;
-								break;
-				}
-			}
 
 		if (tag_type == 0x102a && tag_len >= 4+2+2+2+2) {
 			{ const sint code=read_sshort(fd,tag_offset + 4);
@@ -347,7 +336,6 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 			crw_reader_t crw_reader;
 			if (crw_reader.open_file(shooting_info_fname)) {
 				shooting_info=crw_reader.shooting_info;
-				img.rotate(crw_reader.rotate_degrees);
 				gamma=1;
 				}
 			}
