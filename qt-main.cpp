@@ -506,6 +506,8 @@ class image_window_t : public QMainWindow, public processor_t {
 	uint fullres_processing_do_resize;		// 0 or 1
 	uint fullres_processing_do_USM;			// 0 or 1
 
+	QValueList<sint> file_menu_load_save_ids;
+
 	QPopupMenu file_menu;
 	image_widget_t *image_widget;
 
@@ -629,14 +631,13 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	void load_recent_image(int menuitem_id)
 		{
-			if (menuitem_id <= 0)
-				return;
+			if (menuitem_id >= 1 && menuitem_id <= NR_OF_IMAGES_TO_REMEMBER) {
+				QString menuitem_text=file_menu.text(menuitem_id);
+				while (menuitem_text.length() && menuitem_text.at(0) != ' ')
+					menuitem_text.remove(0,1);
 
-			QString menuitem_text=file_menu.text(menuitem_id);
-			while (menuitem_text.length() && menuitem_text.at(0) != ' ')
-				menuitem_text.remove(0,1);
-
-			load_image(menuitem_text.stripWhiteSpace());
+				load_image(menuitem_text.stripWhiteSpace());
+				}
 			}
 
 	void open_next_numbered_image(void)
@@ -988,17 +989,17 @@ image_window_t::image_window_t(QApplication * const app) :
 
 	menuBar()->insertItem("&File",&file_menu);
 
-	file_menu.insertItem("&Open image..",
-					this,SLOT(open_file_dialog()),CTRL + Key_O);
-	file_menu.insertItem("Open &next numbered image",
-					this,SLOT(open_next_numbered_image()),CTRL + Key_N);
-	file_menu.insertItem("Save &As..",
-					this,SLOT(save_as()),CTRL + Key_A);
+	file_menu_load_save_ids.append(file_menu.insertItem("&Open image..",
+					this,SLOT(open_file_dialog()),CTRL + Key_O));
+	file_menu_load_save_ids.append(file_menu.insertItem(
+					"Open &next numbered image",
+					this,SLOT(open_next_numbered_image()),CTRL + Key_N));
+	file_menu_load_save_ids.append(file_menu.insertItem("Save &As..",
+					this,SLOT(save_as()),CTRL + Key_A));
 	file_menu.insertItem("E&xit",
 					app,SLOT(quit()),CTRL + Key_Q);
 	file_menu.insertSeparator();
 
-	set_recent_images_in_file_menu();
 	connect(&file_menu,SIGNAL(activated(int)),SLOT(load_recent_image(int)));
 
 	{ QPopupMenu * const view_menu=new QPopupMenu(this);
@@ -1018,7 +1019,7 @@ image_window_t::image_window_t(QApplication * const app) :
 
 	processor.set_enh_shadows(0 /*!!!*/);
 	color_and_levels_params_changed();
-	set_caption();
+	set_recent_images_in_file_menu();
 	}
 
 file_save_options_dialog_t::file_save_options_dialog_t(
@@ -1104,7 +1105,12 @@ void image_window_t::set_recent_images_in_file_menu(void)
 		if (i < 10)
 			entry.prepend('&');
 		file_menu.insertItem(entry,(sint)i);
+
+		if (!file_menu_load_save_ids.contains(i))
+			file_menu_load_save_ids.append(i);
 		}
+
+	set_caption();
 	}
 
 void image_window_t::ensure_fullres_loaded_image(void)
@@ -1253,6 +1259,14 @@ void image_window_t::set_caption(void)
 		status="running external image reader process...";
 
 	setCaption(image_fname + ":  " + status);
+
+		// enable/disable file load/save controls
+
+	{ QValueList<sint>::iterator it;
+    for (it=file_menu_load_save_ids.begin();
+									it != file_menu_load_save_ids.end();it++)
+		file_menu.setItemEnabled(*it,!processor.operation_pending_count &&
+									!is_external_reader_process_running()); }
 	}
 
 void image_window_t::check_processing(void)
