@@ -244,6 +244,13 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 				}
 			}
 
+		if (tag_type == 0x180e && tag_len >= 4+4+4) {
+			const time_t tim=read_uint(fd,4,tag_offset);
+			struct tm _tm;
+			strftime(shooting_info.timestamp,lenof(shooting_info.timestamp),
+								"%d-%b-%Y %H:%M:%S",gmtime_r(&tim,&_tm));
+			}
+
 		if ((tag_type >> 8) == 0x30 || (tag_type >> 8) == 0x28)
 			parse_tags(fd,tag_offset,tag_len);
 

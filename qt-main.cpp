@@ -170,7 +170,7 @@ class processor_t :
 		{
 			const image_reader_t::shooting_info_t info=
 											processor.get_shooting_info();
-			char buf[500];
+			char buf[1000];
 
 			*buf='\0';
 			if (*info.camera_type)
@@ -209,6 +209,9 @@ class processor_t :
 				  else
 					sprintf(strchr(buf,'\0'),"%s..%s\n",min_dist,max_dist);
 				}
+
+			if (*info.timestamp)
+				sprintf(strchr(buf,'\0'),"Timestamp: %s\n",info.timestamp);
 
 			return buf;
 			}
