@@ -788,11 +788,10 @@ float color_and_levels_processing_t::process_value(float linear_value,
 	if (density_value < white_clipping_density) {
 		if (white_clipping_density <= 0)
 			density_value=white_clipping_density;
-		  else {
-			const float x=(white_clipping_density - density_value) / contrast;
+		  else
 			density_value=white_clipping_density *
-								exp(-x * contrast/white_clipping_density);
-			}
+							exp((density_value - white_clipping_density) /
+													white_clipping_density);
 		}
 
 	linear_value=pow(10,-density_value);
