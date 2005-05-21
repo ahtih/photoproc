@@ -808,47 +808,46 @@ void color_and_levels_processing_t::process_pixels(
 				const uint dest_bytes_per_pixel) const
 {								//  src: 2.0-gamma 16-bit RGB
 								// dest: 2.2-gamma  8-bit RGB
-	uint remainder[3]={0,0,0};
+	const uchar * const dest_end=dest + dest_bytes_per_pixel*nr_of_pixels;
 
 #define DO_PROCESS_PIXELS(i,dest_c) \
 		{const uint c=translation_tables[i][src[i]] + remainder[i]; \
 		remainder[i]=c & 0xff; dest[dest_c]=(uchar)(c >> 8);} \
 
-	const uchar * const dest_end=dest + dest_bytes_per_pixel*nr_of_pixels;
-
-	if (output_in_BGR_format)
-		for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
-			if (!params.convert_to_grayscale) {
+	if (!params.convert_to_grayscale) {
+		uint remainder[3]={0,0,0};
+		if (output_in_BGR_format)
+			for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
 				DO_PROCESS_PIXELS(0,2);
 				DO_PROCESS_PIXELS(1,1);
 				DO_PROCESS_PIXELS(2,0);
 				}
-			  else {
-				float sum;
-				{ const float c=translation_tables[0][src[0]]; sum =c*c; }
-				{ const float c=translation_tables[1][src[1]]; sum+=c*c; }
-				{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
-
-				uint value=(uint)(pow(sum * (1 /
-							(3*(float)0xff00U*0xff00U)),1/2.2) * 0xff00U);
-				if (value > 0xff00U)
-					value = 0xff00U;
-
-				value+=remainder[0];
-				remainder[0]=value & 0xff;
-				dest[0]=dest[1]=dest[2]=(uchar)(value >> 8);
+		  else
+			for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
+				DO_PROCESS_PIXELS(0,0);
+				DO_PROCESS_PIXELS(1,1);
+				DO_PROCESS_PIXELS(2,2);
 				}
-			}
-	  else
-		for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
-			DO_PROCESS_PIXELS(0,0);
-			DO_PROCESS_PIXELS(1,1);
-			DO_PROCESS_PIXELS(2,2);
-
-			//!!! must add convert_to_grayscale support here as well
-			}
-
+		return;
+		}
 #undef DO_PROCESS_PIXELS
+
+	uint remainder=0;
+	for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
+		float sum;
+		{ const float c=translation_tables[0][src[0]]; sum =c*c; }
+		{ const float c=translation_tables[1][src[1]]; sum+=c*c; }
+		{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
+
+		uint value=(uint)(pow(sum * (1 /
+							(3*(float)0xff00U*0xff00U)),1/2.2) * 0xff00U);
+		if (value > 0xff00U)
+			value = 0xff00U;
+
+		value+=remainder;
+		remainder=value & 0xff;
+		dest[0]=dest[1]=dest[2]=(uchar)(value >> 8);
+		}
 	}
 
 /***************************************************************************/
