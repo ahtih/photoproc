@@ -685,7 +685,11 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 							params.black_level,white_clipping_density);
 			if (value < 0)
 				value = 0;
-			value=pow(value,1/2.2);
+
+			if (params.convert_to_grayscale)
+				value=sqrt(value);
+			  else
+				value=pow(value,1/2.2);
 
 			sint sint_value=(sint)(value * 0xff00U);
 			if (sint_value > 0xff00)
@@ -814,16 +818,25 @@ void color_and_levels_processing_t::process_pixels(
 
 	if (output_in_BGR_format)
 		for (;dest < dest_end;dest+=dest_bytes_per_pixel,src+=3) {
-			DO_PROCESS_PIXELS(0,2);
-			DO_PROCESS_PIXELS(1,1);
-			DO_PROCESS_PIXELS(2,0);
+			if (!params.convert_to_grayscale) {
+				DO_PROCESS_PIXELS(0,2);
+				DO_PROCESS_PIXELS(1,1);
+				DO_PROCESS_PIXELS(2,0);
+				}
+			  else {
+				float sum;
+				{ const float c=translation_tables[0][src[0]]; sum =c*c; }
+				{ const float c=translation_tables[1][src[1]]; sum+=c*c; }
+				{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
 
-			if (params.convert_to_grayscale) {
-				const uchar value=(uchar)(pow((			//!!!
-								pow(dest[0] / 255.0,2.2) +
-								pow(dest[1] / 255.0,2.2) +
-								pow(dest[2] / 255.0,2.2)) / 3,1/2.2) * 255);
-				dest[0]=dest[1]=dest[2]=value;
+				uint value=(uint)(pow(sum * (1 /
+							(3*(float)0xff00U*0xff00U)),1/2.2) * 0xff00U);
+				if (value > 0xff00U)
+					value = 0xff00U;
+
+				value+=remainder[0];
+				remainder[0]=value & 0xff;
+				dest[0]=dest[1]=dest[2]=(uchar)(value >> 8);
 				}
 			}
 	  else
@@ -831,6 +844,8 @@ void color_and_levels_processing_t::process_pixels(
 			DO_PROCESS_PIXELS(0,0);
 			DO_PROCESS_PIXELS(1,1);
 			DO_PROCESS_PIXELS(2,2);
+
+			//!!! must add convert_to_grayscale support here as well
 			}
 
 #undef DO_PROCESS_PIXELS

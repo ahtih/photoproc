@@ -102,7 +102,10 @@ class processing_phase1_t {
 class color_and_levels_processing_t {
 
 	ushort * const buf;
+
 	ushort * translation_tables[3];
+			//  input: 0..0xffff, gamma 2.0
+			// output: 0..0xff00, gamma 2.2 for color, 2.0 for grayscale
 
 	static float apply_shoulders(float value,float delta);
 	static float apply_soft_limit(const float x,const float derivative);
