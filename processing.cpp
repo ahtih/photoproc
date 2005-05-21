@@ -662,6 +662,8 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 
 	const float white_clipping_density=
 								params.white_clipping_stops * log10(2.0);
+	const float after_contrast_density_shift=
+								params.convert_to_grayscale ? log10(3.0) : 0;
 
 	for (uint c=0;c < 3;c++) {
 		uint table_nr=0;
@@ -681,8 +683,9 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 			value*=value;
 
 			value=process_value(value,gain_errors[c],static_errors[c],
-							params.contrast,multiply_coeff,
-							params.black_level,white_clipping_density);
+					params.contrast,multiply_coeff,
+					after_contrast_density_shift,params.black_level,
+					white_clipping_density + after_contrast_density_shift);
 			if (value < 0)
 				value = 0;
 
@@ -784,10 +787,27 @@ float color_and_levels_processing_t::apply_soft_limits(const float value,
 	return linear_value;
 	}
 
+float color_and_levels_processing_t::apply_white_soft_clipping(
+					float density_value,const float white_clipping_density)
+{		// returns linear value
+
+	if (density_value < white_clipping_density) {
+		if (white_clipping_density <= 0)
+			density_value=white_clipping_density;
+		  else
+			density_value=white_clipping_density *
+						exp((density_value - white_clipping_density) /
+													white_clipping_density);
+		}
+
+	return pow(10,-density_value);
+	}
+
 float color_and_levels_processing_t::process_value(float linear_value,
-					const float /*gain_error*/,const float /*static_error*/,
-					const float contrast,const float multiply_coeff,
-			const float black_level,const float white_clipping_density)
+				const float /*gain_error*/,const float /*static_error*/,
+				const float contrast,const float multiply_coeff,
+				const float after_contrast_density_shift,
+				const float black_level,const float white_clipping_density)
 {			// returns linear value
 	if (linear_value < 0)
 		linear_value = 0;
@@ -807,16 +827,9 @@ float color_and_levels_processing_t::process_value(float linear_value,
 	density_value=(density_value-contrast_invariant_density) *
 									contrast + contrast_invariant_density;
 
-	if (density_value < white_clipping_density) {
-		if (white_clipping_density <= 0)
-			density_value=white_clipping_density;
-		  else
-			density_value=white_clipping_density *
-						exp((density_value - white_clipping_density) /
-													white_clipping_density);
-		}
+	density_value+=after_contrast_density_shift;
 
-	return pow(10,-density_value);
+	return apply_white_soft_clipping(density_value,white_clipping_density);
 	}
 
 void color_and_levels_processing_t::process_pixels(
@@ -857,7 +870,7 @@ void color_and_levels_processing_t::process_pixels(
 		{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
 
 		uint value=(uint)(sqrt(sum * (1 /
-									(3*(float)0xff00U*0xff00U))) * 0xffffU);
+									((float)0xff00U*0xff00U))) * 0xffffU);
 		if (value > 0xffffU)
 			value = 0xffffU;
 		value=grayscale_postprocessing_table[value] + remainder;

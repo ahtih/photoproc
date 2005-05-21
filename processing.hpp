@@ -114,9 +114,13 @@ class color_and_levels_processing_t {
 	static float apply_soft_limit(const float x,const float derivative);
 	static float apply_soft_limits(const float value,
 									float black_level,float white_level);
+	static float apply_white_soft_clipping(float density_value,
+									const float white_clipping_density);
+		// returns linear value
 	static float process_value(float linear_value,
 				const float gain_error,const float static_error,
 				const float contrast,const float multiply_coeff,
+				const float after_contrast_density_shift,
 				const float black_level,const float white_clipping_density);
 		// returns linear value
 
