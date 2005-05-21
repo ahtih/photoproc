@@ -655,7 +655,7 @@ void processing_phase1_t::skip_lines(const uint nr_of_lines)
 
 color_and_levels_processing_t::color_and_levels_processing_t(
 												const params_t &_params) :
-						buf(new ushort [3 * 64 * 1024]), params(_params)
+						buf(new ushort [4 * 64 * 1024]), params(_params)
 {
 	const float   gain_errors[3]={0,0,0};	// {0,		+0.03,		+0.12   };
 	const float static_errors[3]={0,0,0};	// {+17/255.0,+15/255.0,	-5/255.0};
@@ -696,6 +696,24 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 				sint_value = 0xff00;
 
 			translation_tables[c][i]=(ushort)sint_value;
+			}
+		}
+
+	grayscale_postprocessing_table=NULL;
+	if (params.convert_to_grayscale) {
+		grayscale_postprocessing_table=buf + (3 * 64 * 1024);
+
+		for (uint i=0;i <= 0xffffU;i++) {
+			float value=i / (float)0xffffU;
+			value*=value;
+
+			value=pow(value,1/2.2);
+
+			sint sint_value=(sint)(value * 0xff00U);
+			if (sint_value > 0xff00)
+				sint_value = 0xff00;
+
+			grayscale_postprocessing_table[i]=(ushort)sint_value;
 			}
 		}
 	}
@@ -794,12 +812,11 @@ float color_and_levels_processing_t::process_value(float linear_value,
 			density_value=white_clipping_density;
 		  else
 			density_value=white_clipping_density *
-							exp((density_value - white_clipping_density) /
+						exp((density_value - white_clipping_density) /
 													white_clipping_density);
 		}
 
-	linear_value=pow(10,-density_value);
-	return linear_value;
+	return pow(10,-density_value);
 	}
 
 void color_and_levels_processing_t::process_pixels(
@@ -839,12 +856,11 @@ void color_and_levels_processing_t::process_pixels(
 		{ const float c=translation_tables[1][src[1]]; sum+=c*c; }
 		{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
 
-		uint value=(uint)(pow(sum * (1 /
-							(3*(float)0xff00U*0xff00U)),1/2.2) * 0xff00U);
-		if (value > 0xff00U)
-			value = 0xff00U;
-
-		value+=remainder;
+		uint value=(uint)(sqrt(sum * (1 /
+									(3*(float)0xff00U*0xff00U))) * 0xffffU);
+		if (value > 0xffffU)
+			value = 0xffffU;
+		value=grayscale_postprocessing_table[value] + remainder;
 		remainder=value & 0xff;
 		dest[0]=dest[1]=dest[2]=(uchar)(value >> 8);
 		}
