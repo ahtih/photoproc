@@ -592,6 +592,13 @@ class image_window_t : public QMainWindow, public processor_t {
 			if (isVisible() && isActiveWindow()) {
 				settings.writeEntry(SETTINGS_PREFIX "size/x",size().width());
 				settings.writeEntry(SETTINGS_PREFIX "size/y",size().height());
+
+				if (pos().x() == -1 && pos().y() == -1) {
+					const QPoint point=mapToGlobal(
+						frameGeometry().topLeft() - geometry().topLeft());
+					settings.writeEntry(SETTINGS_PREFIX  "pos/x",point.x());
+					settings.writeEntry(SETTINGS_PREFIX  "pos/y",point.y());
+					}
 				}
 			}
 
