@@ -236,7 +236,7 @@ QString processor_t::start_loading_image(const QString &fname,
 		// start loading image
 
 	const QString ext=QFileInfo(fname).extension(FALSE).lower();
-	if (ext == "nef" || ext == "crw" || ext == "x-canon-raw" ||
+	if (ext == "nef" || ext == "crw" || ext == "cr2" || ext == "x-canon-raw" ||
 						ext == "mrw" || ext == "orf" || ext == "dcr") {
 		QStringList args;
 		args << "dcraw";
@@ -614,7 +614,7 @@ class image_window_t : public QMainWindow, public processor_t {
 		{
 			const QString fname=QFileDialog::getOpenFileName(
 				settings.readEntry(SETTINGS_PREFIX "recent_images/1"),
-				"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.NEF *.MRW *.ORF *.DCR)",
+				"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.cr2 *.CR2 *.NEF *.MRW *.ORF *.DCR)",
 				this,"open image dialog","Open image");
 			if (fname.isNull())
 				return;
