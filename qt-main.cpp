@@ -612,12 +612,18 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	void open_file_dialog(void)
 		{
-			const QString fname=QFileDialog::getOpenFileName(
-				settings.readEntry(SETTINGS_PREFIX "recent_images/1"),
-				"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW *.cr2 *.CR2 *.NEF *.MRW *.ORF *.DCR)",
-				this,"open image dialog","Open image");
-			if (fname.isNull())
-				return;
+			QString fname=
+				settings.readEntry(SETTINGS_PREFIX "recent_images/1");
+			while (1) {
+				fname=QFileDialog::getOpenFileName(fname,
+					"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW "
+									"*.cr2 *.CR2 *.NEF *.MRW *.ORF *.DCR)",
+					this,"open image dialog","Open image");
+				if (fname.isNull())
+					return;
+				if (!QFileInfo(fname).isDir())
+					break;
+				}
 
 			load_image(fname);
 			}
@@ -634,18 +640,26 @@ class image_window_t : public QMainWindow, public processor_t {
 			if (image_fname.isEmpty())
 				return;
 
-			QString save_fname=image_fname;
-			save_fname.replace(QRegExp("^.*[\\\\/]"),"");
-			save_fname.replace(QRegExp("\\.[^.]*$"),"");
-			save_fname+=".bmp";
-
 			QString last_save_directory=settings.readEntry(
-										SETTINGS_PREFIX "last_save_directory");
-			if (!last_save_directory.isEmpty())
-				save_fname.prepend(last_save_directory + "/");
+									SETTINGS_PREFIX "last_save_directory");
+			QString fname;
+			while (1) {
+				QString save_fname=image_fname;
+				save_fname.replace(QRegExp("^.*[\\\\/]"),"");
+				save_fname.replace(QRegExp("\\.[^.]*$"),"");
+				save_fname+=".bmp";
 
-			QString fname=QFileDialog::getSaveFileName(save_fname,
+				if (!last_save_directory.isEmpty())
+					save_fname.prepend(last_save_directory + "/");
+
+				fname=QFileDialog::getSaveFileName(save_fname,
 						"BMP files (*.bmp)",this,"save as dialog","Save As");
+
+				if (!QFileInfo(fname).isDir())
+					break;
+
+				last_save_directory=fname;				
+				}
 
 			if (fname.isEmpty())
 				return;
