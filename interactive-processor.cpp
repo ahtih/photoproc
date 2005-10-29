@@ -415,7 +415,7 @@ void interactive_image_processor_t::do_processing(const params_t par)
 		delete [] sum_buf;
 
 #if MEASURE_PASS1_TIME
-		printf("pass1: processing time %dms\n",get_ms() - tim);
+		printf("pass1: processing time %dms\n",(int)(get_ms() - tim));
 #endif
 		}
 
@@ -435,7 +435,7 @@ void interactive_image_processor_t::do_processing(const params_t par)
 
 #if MEASURE_PASS2_TIME
 		printf("pass2: init time: %dms processing time: %dms\n",
-										init_time - tim,get_ms() - init_time);
+						(int)(init_time - tim),(int)(get_ms() - init_time));
 #endif
 		}
 	}
