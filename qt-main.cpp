@@ -137,10 +137,13 @@ class processor_t :
 	public:
 
 	interactive_image_processor_t processor;
+
+#ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 	QByteArray image_file_data;		// only nonempty if the currently loaded
 									//   image was loaded with half-res;
 									//   in this case we need image_file_data
 									//   for later full-res loading
+#endif
 
 	uint is_external_reader_process_running(void) const
 		{
@@ -231,7 +234,9 @@ QString processor_t::start_loading_image(const QString &fname,
 										actual_fname_to_load.utf8().data());
 		}
 
+#ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 	image_file_data.resize(0);
+#endif
 
 		// start loading image
 
@@ -244,6 +249,7 @@ QString processor_t::start_loading_image(const QString &fname,
 		args << "-c";			// output to stdout
 		args << "-b" << "3.8";	// 3.8x brightness
 
+#ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 		if (!load_fullres) {
 			args << "-h";			// half-res image for fast processing
 
@@ -255,6 +261,9 @@ QString processor_t::start_loading_image(const QString &fname,
 				}
 			image_file_data=f.readAll();
 			}
+#else
+		args << "-h";			// half-res image for fast processing
+#endif
 
 		args << actual_fname_to_load;
 
@@ -1170,6 +1179,7 @@ void image_window_t::set_recent_images_in_file_menu(void)
 
 void image_window_t::ensure_fullres_loaded_image(void)
 {
+#ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 	if (!image_file_data.count() || image_fname.isEmpty())
 		return;
 
@@ -1214,6 +1224,7 @@ void image_window_t::ensure_fullres_loaded_image(void)
 							" for re-loading the image in full resolution. "
 							"The image remains loaded in half resolution",
 							QMessageBox::Ok,QMessageBox::NoButton);
+#endif
 	}
 
 void image_window_t::load_image(const QString &fname)
