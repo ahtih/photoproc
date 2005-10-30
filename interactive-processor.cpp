@@ -484,11 +484,10 @@ void interactive_image_processor_t::draw_processing_curve(const params_t par) co
 	for (uint x=0;x < par.working_x_size;x++) {
 		const float src_density=4.0 * (1 - x / (float)(par.working_x_size-1));
 
-		const uint src_value=(uint)floor(QUANTUM_MAXVAL *
-										sqrt(pow(10,-src_density)) + 0.5);
 		quantum_type src_rgb[3];
-		src_rgb[0]=src_rgb[1]=src_rgb[2]=(quantum_type)(
-				(src_value <= QUANTUM_MAXVAL) ? src_value : QUANTUM_MAXVAL);
+		src_rgb[0]=src_rgb[1]=src_rgb[2]=
+						processing_phase1_t::float_sqrt_to_quantum(
+													pow(10,-src_density));
 		uchar dest_rgb[3];
 		pass2.process_pixels(dest_rgb,src_rgb,1,0,sizeof(dest_rgb));
 

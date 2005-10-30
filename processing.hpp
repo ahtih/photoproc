@@ -101,6 +101,15 @@ class processing_phase1_t {
 	image_reader_t &image_reader;
 	const uint undo_enh_shadows;
 
+#if PHOTOPROC_QUANTUM_BITS == 8
+	static const struct sqrt_data_t {
+		uint shift_val,and_val,baseidx;
+		uint dummy_for_alignment;
+		} sqrt_data[32];
+
+	static const uchar sqrt_table[];
+#endif
+
 	quantum_type process_value(float value);
 
 	public:
@@ -113,6 +122,8 @@ class processing_phase1_t {
 	void skip_lines(const uint nr_of_lines);
 	void get_line(void);
 			// outputs a line of 2.0-gamma RGB quantums
+	static inline quantum_type float_sqrt_to_quantum(const float value) throw();
+			// value must be >=0 and < 256.0
 	};
 
 class color_and_levels_processing_t {
