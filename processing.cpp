@@ -850,36 +850,6 @@ const processing_phase1_t::sqrt_data_t processing_phase1_t::sqrt_data[32]={
 					};
 #endif
 
-inline quantum_type processing_phase1_t::float_sqrt_to_quantum(
-												const float value) throw()
-{			// value must be >=0 and < 256.0
-
-#if PHOTOPROC_QUANTUM_BITS == 8
-	const uint uint_val=(uint)(value * (1U << 24));
-
-	uint k=0;
-	{ uint word=uint_val;
-	if (word > 0x0000ffff) { word>>=16; k+=16; }
-	if (word > 0x000000ff) { word>>=8;  k+=8;  }
-	if (word > 0x0000000f) { word>>=4;  k+=4;  }
-	if (word > 0x00000003) { word>>=2;  k+=2;  }
-	if (word > 0x00000001) k++; }
-
-		// k is 0..31 here, as the number of the highest bit set in uint_val
-		// if uint_val > 0x80000000U, k=31; if uint_val < 1, k=0
-
-	const sqrt_data_t * const data=&sqrt_data[k];
-	return sqrt_table[
-			((uint_val >> data->shift_val) & data->and_val) + data->baseidx ];
-#else
-	uint uint_val=(uint)(sqrt(value) * QUANTUM_MAXVAL);
-	if (uint_val > QUANTUM_MAXVAL)
-		uint_val = QUANTUM_MAXVAL;
-
-	return (quantum_type)uint_val;
-#endif
-	}
-
 quantum_type processing_phase1_t::process_value(float value)
 {
 	if (value < 0)
