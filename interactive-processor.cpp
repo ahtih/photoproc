@@ -307,14 +307,14 @@ uint interactive_image_processor_t::get_operation_results(
 	}
 
 void interactive_image_processor_t::resize_line(
-					ushort *dest_p,const uint dest_size,
+					quantum_type *dest_p,const uint dest_size,
 					const uint *src_p,const uint src_size)
 {
 		//!!! mis siis kui src_size <= dest_size
 
 	uint  src_mult_value=0;		// src_x * dest_size
 	uint dest_mult_value=0;		// dest_x * src_size
-	for (const ushort * const dest_p_end=dest_p + 3*dest_size;
+	for (const quantum_type * const dest_p_end=dest_p + 3*dest_size;
 											dest_p < dest_p_end;dest_p+=3) {
 		dest_mult_value+=src_size;
 		uint count=0;
@@ -329,14 +329,14 @@ void interactive_image_processor_t::resize_line(
 			}
 		if (count >= 2) {
 							//!!! optimeerida shifti ja muli/tabeliga
-			dest_p[0]=(ushort)(dest_c0 / count);
-			dest_p[1]=(ushort)(dest_c1 / count);
-			dest_p[2]=(ushort)(dest_c2 / count);
+			dest_p[0]=(quantum_type)(dest_c0 / count);
+			dest_p[1]=(quantum_type)(dest_c1 / count);
+			dest_p[2]=(quantum_type)(dest_c2 / count);
 			}
 		  else {
-			dest_p[0]=(ushort)dest_c0;
-			dest_p[1]=(ushort)dest_c1;
-			dest_p[2]=(ushort)dest_c2;
+			dest_p[0]=(quantum_type)dest_c0;
+			dest_p[1]=(quantum_type)dest_c1;
+			dest_p[2]=(quantum_type)dest_c2;
 			}
 		}
 	}
@@ -347,7 +347,7 @@ void interactive_image_processor_t::do_processing(const params_t par)
 		if (lowres_phase1_image != NULL)
 			delete [] lowres_phase1_image;
 		lowres_phase1_image=
-					new ushort [par.working_x_size * par.working_y_size * 3];
+			new quantum_type [par.working_x_size * par.working_y_size * 3];
 		}
 
 	if ((sint)par.required_level >= (sint)PASS1) {
@@ -374,13 +374,13 @@ void interactive_image_processor_t::do_processing(const params_t par)
 			uint count=0;
 			while (src_mult_value < dest_mult_value) {
 				phase1.get_line();
-				const ushort * const output_line_start=
+				const quantum_type * const output_line_start=
 										phase1.output_line + par.left_crop*3;
-				const ushort * const output_line_end=
+				const quantum_type * const output_line_end=
 										output_line_start + src_size.x*3;
 				uint *q=sum_buf;
-				for (const ushort *p=output_line_start;p < output_line_end;
-																p+=3,q+=3) {
+				for (const quantum_type *p=output_line_start;
+											p < output_line_end;p+=3,q+=3) {
 					q[0]+=p[0];
 					q[1]+=p[1];
 					q[2]+=p[2];
@@ -484,11 +484,11 @@ void interactive_image_processor_t::draw_processing_curve(const params_t par) co
 	for (uint x=0;x < par.working_x_size;x++) {
 		const float src_density=4.0 * (1 - x / (float)(par.working_x_size-1));
 
-		const uint src_value=(uint)floor(0xffff *
+		const uint src_value=(uint)floor(QUANTUM_MAXVAL *
 										sqrt(pow(10,-src_density)) + 0.5);
-		ushort src_rgb[3];
-		src_rgb[0]=src_rgb[1]=src_rgb[2]=(ushort)(
-								(src_value <= 0xffff) ? src_value : 0xffff);
+		quantum_type src_rgb[3];
+		src_rgb[0]=src_rgb[1]=src_rgb[2]=(quantum_type)(
+				(src_value <= QUANTUM_MAXVAL) ? src_value : QUANTUM_MAXVAL);
 		uchar dest_rgb[3];
 		pass2.process_pixels(dest_rgb,src_rgb,1,0,sizeof(dest_rgb));
 

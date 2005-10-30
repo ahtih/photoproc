@@ -81,33 +81,49 @@ class image_reader_t {
 														uint dest[3]) const;
 	};
 
+#ifndef PHOTOPROC_QUANTUM_BITS
+#if QuantumDepth > 8
+#define PHOTOPROC_QUANTUM_BITS	16
+#else
+#define PHOTOPROC_QUANTUM_BITS	8
+#endif
+#endif
+
+#if PHOTOPROC_QUANTUM_BITS == 8
+typedef uchar quantum_type;
+#else
+typedef ushort quantum_type;
+#endif
+
+#define QUANTUM_MAXVAL ((quantum_type)((1U << PHOTOPROC_QUANTUM_BITS)-1))
+
 class processing_phase1_t {
 	image_reader_t &image_reader;
 	const uint undo_enh_shadows;
 
-	ushort process_value(float value);
+	quantum_type process_value(float value);
 
 	public:
-	ushort * const output_line;
-	const ushort * const output_line_end;
+	quantum_type * const output_line;
+	const quantum_type * const output_line_end;
 
 	processing_phase1_t(image_reader_t &_image_reader,
 											const uint _undo_enh_shadows=0);
 	~processing_phase1_t(void);
 	void skip_lines(const uint nr_of_lines);
 	void get_line(void);
-			// outputs a line of 2.0-gamma RGB ushort's
+			// outputs a line of 2.0-gamma RGB quantums
 	};
 
 class color_and_levels_processing_t {
 	ushort * const buf;
 
 	ushort * translation_tables[3];
-			//  input: 0..0xffff, gamma 2.0
+			//  input: 0..QUANTUM_MAXVAL, gamma 2.0
 			// output: 0..0xff00, gamma 2.2 for color, 2.0 for grayscale
 
 	ushort * grayscale_postprocessing_table;
-			//  input: 0..0xffff, gamma 2.0
+			//  input: 0..QUANTUM_MAXVAL, gamma 2.0
 			// output: 0..0xff00, gamma 2.2
 
 	static float apply_shoulders(float value,float delta);
@@ -138,11 +154,11 @@ class color_and_levels_processing_t {
 
 	color_and_levels_processing_t(const params_t &_params);
 	~color_and_levels_processing_t(void);
-	void process_pixels(uchar *dest,const ushort *src,
+	void process_pixels(uchar *dest,const quantum_type *src,
 			const uint nr_of_pixels,const uint output_in_BGR_format=0,
 									const uint dest_bytes_per_pixel=3) const;
-		//  src: 2.0-gamma 16-bit RGB
-		// dest: 2.2-gamma  8-bit RGB
+		//  src: 2.0-gamma quantum_type RGB
+		// dest: 2.2-gamma 8-bit RGB
 	};
 
 void optimize_transfer_matrix(FILE * const input_file);

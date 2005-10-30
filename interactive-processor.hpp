@@ -41,7 +41,7 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 	notification_receiver_t * const notification_receiver;
 	QMutex image_load_mutex;
 	image_reader_t image_reader;
-	ushort *lowres_phase1_image;		// 2.0-gamma RGB ushort's
+	quantum_type *lowres_phase1_image;		// 2.0-gamma RGB quantums
 	SyncQueue results_queue;
 
 	enum required_level_t {PASS2=0,PASS1,NEW_LOWRES_BUF};
@@ -80,7 +80,7 @@ class interactive_image_processor_t : public QThread, public SyncQueue {
 	void do_fullres_processing(const params_t par,const char * const fname);
 	void draw_processing_curve(const params_t par) const;
 	void draw_gamma_test_image(const params_t par) const;
-	static void resize_line(ushort *dest_p,const uint dest_size,
+	static void resize_line(quantum_type *dest_p,const uint dest_size,
 							const uint *src_p,const uint src_size);
 	vec<float> get_full_frame_pos_fraction(const vec<float> pos_fraction);
 	public:

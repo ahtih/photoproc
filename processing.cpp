@@ -578,7 +578,7 @@ float image_reader_t::get_spot_averages(uint x,uint y,uint dest[3],
 processing_phase1_t::processing_phase1_t(image_reader_t &_image_reader,
 										const uint _undo_enh_shadows) :
 		image_reader(_image_reader), undo_enh_shadows(_undo_enh_shadows),
-		output_line(new ushort [_image_reader.img.columns() * 3 + 1]),
+		output_line(new quantum_type [_image_reader.img.columns() * 3 + 1]),
 		output_line_end(output_line + _image_reader.img.columns() * 3)
 {
 	image_reader.reset_read_pointer();
@@ -589,7 +589,7 @@ processing_phase1_t::~processing_phase1_t(void)
 	delete [] output_line;
 	}
 
-ushort processing_phase1_t::process_value(float value)
+quantum_type processing_phase1_t::process_value(float value)
 {
 	if (value < 0)
 		value = 0;
@@ -622,17 +622,17 @@ ushort processing_phase1_t::process_value(float value)
 			}
 		}
 
-	uint uint_val=(uint)(sqrt(value) * 0xffffU);
-	if (uint_val > 0xffffU)
-		uint_val=0xffffU;
+	uint uint_val=(uint)(sqrt(value) * QUANTUM_MAXVAL);
+	if (uint_val > QUANTUM_MAXVAL)
+		uint_val=QUANTUM_MAXVAL;
 
-	return (ushort)uint_val;
+	return (quantum_type)uint_val;
 	}
 
 void processing_phase1_t::get_line(void)
-{			// outputs a line of 2.0-gamma RGB ushort's
+{			// outputs a line of 2.0-gamma RGB quantums
 
-	for (ushort *p=output_line;p < output_line_end;p+=3) {
+	for (quantum_type *p=output_line;p < output_line_end;p+=3) {
 		float rgb[3];		// red, green, blue
 		image_reader.get_linear_RGB(rgb);
 
@@ -655,7 +655,7 @@ void processing_phase1_t::skip_lines(const uint nr_of_lines)
 
 color_and_levels_processing_t::color_and_levels_processing_t(
 												const params_t &_params) :
-						buf(new ushort [4 * 64 * 1024]), params(_params)
+				buf(new ushort [4 * (QUANTUM_MAXVAL+1)]), params(_params)
 {
 	const float   gain_errors[3]={0,0,0};	// {0,		+0.03,		+0.12   };
 	const float static_errors[3]={0,0,0};	// {+17/255.0,+15/255.0,	-5/255.0};
@@ -671,15 +671,15 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 			if (params.color_coeffs[c] == params.color_coeffs[table_nr])
 				break;
 
-		translation_tables[c]=buf + (table_nr * 64 * 1024);
+		translation_tables[c]=buf + table_nr*(QUANTUM_MAXVAL+1);
 		if (table_nr != c)
 			continue;
 
 		float multiply_coeff=pow(2,params.exposure_shift) *
 													params.color_coeffs[c];
 
-		for (uint i=0;i <= 0xffffU;i++) {
-			float value=i / (float)0xffffU;
+		for (uint i=0;i <= QUANTUM_MAXVAL;i++) {
+			float value=i / (float)QUANTUM_MAXVAL;
 			value*=value;
 
 			value=process_value(value,gain_errors[c],static_errors[c],
@@ -704,10 +704,10 @@ color_and_levels_processing_t::color_and_levels_processing_t(
 
 	grayscale_postprocessing_table=NULL;
 	if (params.convert_to_grayscale) {
-		grayscale_postprocessing_table=buf + (3 * 64 * 1024);
+		grayscale_postprocessing_table=buf + 3*(QUANTUM_MAXVAL+1);
 
-		for (uint i=0;i <= 0xffffU;i++) {
-			float value=i / (float)0xffffU;
+		for (uint i=0;i <= QUANTUM_MAXVAL;i++) {
+			float value=i / (float)QUANTUM_MAXVAL;
 			value*=value;
 
 			value=pow(value,1/2.2);
@@ -833,11 +833,11 @@ float color_and_levels_processing_t::process_value(float linear_value,
 	}
 
 void color_and_levels_processing_t::process_pixels(
-				uchar *dest,const ushort *src,const uint nr_of_pixels,
+				uchar *dest,const quantum_type *src,const uint nr_of_pixels,
 				const uint output_in_BGR_format,
 				const uint dest_bytes_per_pixel) const
-{								//  src: 2.0-gamma 16-bit RGB
-								// dest: 2.2-gamma  8-bit RGB
+{								//  src: 2.0-gamma quantum_type RGB
+								// dest: 2.2-gamma 8-bit RGB
 	const uchar * const dest_end=dest + dest_bytes_per_pixel*nr_of_pixels;
 
 #define DO_PROCESS_PIXELS(i,dest_c) \
@@ -870,9 +870,9 @@ void color_and_levels_processing_t::process_pixels(
 		{ const float c=translation_tables[2][src[2]]; sum+=c*c; }
 
 		uint value=(uint)(sqrt(sum * (1 /
-									((float)0xff00U*0xff00U))) * 0xffffU);
-		if (value > 0xffffU)
-			value = 0xffffU;
+								((float)0xff00U*0xff00U))) * QUANTUM_MAXVAL);
+		if (value > QUANTUM_MAXVAL)
+			value = QUANTUM_MAXVAL;
 		value=grayscale_postprocessing_table[value] + remainder;
 		remainder=value & 0xff;
 		dest[0]=dest[1]=dest[2]=(uchar)(value >> 8);
