@@ -290,7 +290,9 @@ uint crw_reader_t::open_file(const char * const fname)
 	if (offset < sizeof(signature)+4 || offset > file_size-4)
 		return 0;
 
-	parse_tags(fd,offset,file_size-offset);
+	if (!parse_tags(fd,offset,file_size-offset))
+		return 0;
+
 	return 1;
 	}
 
