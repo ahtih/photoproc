@@ -1274,12 +1274,14 @@ struct axis_t {
 	const table_t &actual_table;
 	const table_t &ideal_table;
 	const axis_t * const other_axis;
+	const uint increases_along_coord2;
 
 	float calculate_error(const float predicted_value,
 											const uint i,const uint j) const
 		{
 			return (actual_table[i][j] - predicted_value) * 100.0 * 2 /
-					(actual_table[i][j] + other_axis->actual_table[i][j] + 1);
+					(fabs(actual_table[i][j]) +
+								fabs(other_axis->actual_table[i][j]) + 1);
 			}
 	};
 
@@ -1290,15 +1292,17 @@ struct nonlinear_prediction_params_t {
 static float calculate_error(const table_t &predicted_table,
 												const axis_t * const t)
 {
-	float sum_of_squares=0;
+	float sum_of_squares=0,sum_of_weights=0;
 
-	for (uint i=0;i < predicted_table.N;i++)
-		for (uint j=0;j < predicted_table.N;j++) {
+	for (uint i=!!t->increases_along_coord2;i < predicted_table.N;i++)
+		for (uint j=!t->increases_along_coord2;j < predicted_table.N;j++) {
 			const float error=t->calculate_error(predicted_table[i][j],i,j);
-			sum_of_squares+=error * error;
+			const float weight=max(i,j);
+			sum_of_squares+=error * error * weight;
+			sum_of_weights+=weight;
 			}
 
-	return sqrt(sum_of_squares / (predicted_table.N*predicted_table.N));
+	return sqrt(sum_of_squares / sum_of_weights);
 	}
 
 static void print_error_table(const table_t &predicted_table,
@@ -1411,6 +1415,61 @@ static float optimize_linear_and_nonlinear(
 	return best_error;
 	}
 
+static void improve_ideal_table(table_t &dest_table,
+			const table_t &independent_table,const table_t &dependent_table,
+			const uint swap_axes)
+{
+	uint i,j;
+	uint &coord1=swap_axes ? j : i;
+	uint &coord2=swap_axes ? i : j;
+
+	for (coord1=0;coord1 < dest_table.N;coord1++) {
+
+		float avg_independent=0,avg_dependent=0;
+		for (coord2=0;coord2 < dest_table.N;coord2++) {
+			avg_independent+=independent_table[i][j];
+			  avg_dependent+=  dependent_table[i][j];
+			}
+		avg_independent/=dest_table.N;
+		  avg_dependent/=dest_table.N;
+
+		float sum1=0,sum2=0;
+		for (coord2=0;coord2 < dest_table.N;coord2++) {
+			sum1+=	(independent_table[i][j] - avg_independent) *
+					(  dependent_table[i][j] -   avg_dependent);
+			sum2+=	(independent_table[i][j] - avg_independent) *
+					(independent_table[i][j] - avg_independent);
+			}
+
+		coord2=0;
+		const float orig_value=dependent_table[i][j];
+		float value=coord1 ? (avg_dependent - avg_independent * sum1 / sum2) :
+																orig_value;
+		if (value < 0.8*orig_value)
+			value = 0.8*orig_value;
+		if (value > 1.2*orig_value)
+			value = 1.2*orig_value;
+
+		for (coord2=0;coord2 < dest_table.N;coord2++)
+			dest_table[i][j]=value;
+		}
+	}
+
+static void set_ideal_tables(table_t &ideal_X,table_t &ideal_Y,
+							const table_t &actual_X,const table_t &actual_Y)
+{
+	{ for (uint i=0;i < actual_X.N;i++)
+		for (uint j=0;j < actual_X.N;j++) {
+			ideal_X[i][j]=actual_X[i][0];
+			ideal_Y[i][j]=actual_Y[0][j];
+			}}
+
+	for (uint i=0;i < 10;i++) {
+		improve_ideal_table(ideal_X,ideal_Y,actual_X,0);
+		improve_ideal_table(ideal_Y,ideal_X,actual_Y,1);
+		}
+	}
+
 void optimize_transfer_matrix(FILE * const input_file)
 {
 		/******************************/
@@ -1421,7 +1480,7 @@ void optimize_transfer_matrix(FILE * const input_file)
 
 	table_t actual_X(MAX_N),actual_Y(MAX_N);
 
-	printf("Reading records from stdin...\n");
+	// printf("Reading records from stdin...\n");
 
 	uint nr_of_input_records=0;
 	for (;;) {
@@ -1438,7 +1497,7 @@ void optimize_transfer_matrix(FILE * const input_file)
 		nr_of_input_records++;
 		}
 
-	printf("%u records read\n",nr_of_input_records);
+	// printf("%u records read\n",nr_of_input_records);
 
 		/*******************************/
 		/*****                     *****/
@@ -1458,7 +1517,7 @@ void optimize_transfer_matrix(FILE * const input_file)
 			break;
 		}
 
-	printf("Assuming %ux%u square of measurements\n",N,N);
+	// printf("Assuming %ux%u square of measurements\n",N,N);
 	actual_X.set_N(N);
 	actual_Y.set_N(N);
 
@@ -1468,29 +1527,22 @@ void optimize_transfer_matrix(FILE * const input_file)
 		/*****                            *****/
 		/**************************************/
 
-	/*
-	printf("X corners: %.0f %.0f %.0f %.0f\n",actual_X[0][0],actual_X[0][N-1],
-										actual_X[N-1][0],actual_X[N-1][N-1]);
-	printf("Y corners: %.0f %.0f %.0f %.0f\n",actual_Y[0][0],actual_Y[N-1][0],
-										actual_Y[0][N-1],actual_Y[N-1][N-1]);
-	*/
-
 	if ((actual_X[N-1][0]+1)*(actual_Y[N-1][0]+1) <
 									(actual_X[0][0]+1)*(actual_Y[0][0]+1)) {
-		printf("Flipped minor axis\n");
+		// printf("Flipped minor axis\n");
 		actual_X.flip_major_axis();
 		actual_Y.flip_major_axis();
 		}
 
 	if ((actual_X[0][N-1]+1)*(actual_Y[0][N-1]+1) <
 									(actual_X[0][0]+1)*(actual_Y[0][0]+1)) {
-		printf("Flipped major axis\n");
+		// printf("Flipped major axis\n");
 		actual_X.flip_minor_axis();
 		actual_Y.flip_minor_axis();
 		}
 
 	if (actual_X[N-1][0]*actual_Y[0][N-1] < actual_X[0][N-1]*actual_Y[N-1][0]) {
-		printf("Transposed input table\n");
+		// printf("Transposed input table\n");
 		actual_X.transpose();
 		actual_Y.transpose();
 		}
@@ -1513,12 +1565,7 @@ void optimize_transfer_matrix(FILE * const input_file)
 		/*************************************/
 
 	table_t ideal_X(actual_X.N),ideal_Y(actual_Y.N);
-
-	{ for (uint i=0;i < N;i++)
-		for (uint j=0;j < N;j++) {
-			ideal_X[i][j]=actual_X[i][0];
-			ideal_Y[i][j]=actual_Y[0][j];
-			}}
+	set_ideal_tables(ideal_X,ideal_Y,actual_X,actual_Y);
 
 		/**********************************/
 		/*****                        *****/
@@ -1533,20 +1580,22 @@ void optimize_transfer_matrix(FILE * const input_file)
 		float linear_only_coeff,linear_only_error;
 		nonlinear_prediction_params_t nonlinear_prediction_params;
 		float nonlinear_error;
-		} axis_info[2]={{{"X",actual_X,ideal_X,&axis_info[1].axis},
-														&axis_info[1],N},
-						{{"Y",actual_Y,ideal_Y,&axis_info[0].axis},
-														&axis_info[0],N}};
+		} axis_info[2]={
+			{{"X",actual_X,ideal_X,&axis_info[1].axis,0},&axis_info[1],N},
+			{{"Y",actual_Y,ideal_Y,&axis_info[0].axis,1},&axis_info[0],N}};
 
 	{ for (axis_info_t *a=&axis_info[0];a <= &axis_info[1];a++) {
+
+		// print_error_table(a->axis.ideal_table,&a->axis);
+
 		a->linear_only_coeff=optimize_linear_coeff(
 											a->linear_only_error,&a->axis);
-		printf("Linear %s prediction (error without prediction %.1f%%): "
-										"linear coeff %.3f\n",a->axis.name,
+		printf("Linear %s prediction (input error %.1f%%): "
+					"linear coeff %.3f, error map (%.3f%% remaining error):\n",
+							a->axis.name,
 							calculate_error(a->axis.ideal_table,&a->axis),
-													a->linear_only_coeff);
+								a->linear_only_coeff,a->linear_only_error);
 
-		printf("Linear prediction error map (%.3f%% average error):\n",a->linear_only_error);
 		predict_linear_only(a->linear_only_coeff,a->linear_predicted_table,
 																	&a->axis);
 		print_error_table(a->linear_predicted_table,&a->axis);
