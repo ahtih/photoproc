@@ -123,7 +123,9 @@ class crw_reader_t {
 	uint read_uint(const sint fd,const uint nr_of_bytes);
 	uint read_uint(const sint fd,const uint nr_of_bytes,const uint offset);
 	uint read_sshort(const sint fd,const uint offset);
-	uint parse_tags(const sint fd,const uint offset,const uint len);
+	uint parse_crw_tags(const sint fd,const uint offset,const uint len);
+		// returns zero if input file is invalid
+	uint parse_cr2_tags(const sint fd,const uint offset,const uint len);
 		// returns zero if input file is invalid
 
 	public:
@@ -165,7 +167,7 @@ uint crw_reader_t::read_sshort(const sint fd,const uint offset)
 	return (code < 0x8000) ? code : (-(sint)(0x10000-code));
 	}
 
-uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
+uint crw_reader_t::parse_crw_tags(const sint fd,const uint offset,const uint len)
 {							// returns zero if input file is invalid
 	if (len < 4)
 		return 0;
@@ -237,8 +239,7 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 
 			if (!strcmp(shooting_info.camera_type,"Canon EOS D30") ||
 				!strcmp(shooting_info.camera_type,"Canon EOS D60") ||
-				!strcmp(shooting_info.camera_type,"Canon EOS 10D") ||
-				!strcmp(shooting_info.camera_type,"Canon EOS 20D")) {
+				!strcmp(shooting_info.camera_type,"Canon EOS 10D")) {
 				shooting_info.frame_size_mm.x=22.7;
 				shooting_info.frame_size_mm.y=15.1;
 				}
@@ -252,7 +253,65 @@ uint crw_reader_t::parse_tags(const sint fd,const uint offset,const uint len)
 			}
 
 		if ((tag_type >> 8) == 0x30 || (tag_type >> 8) == 0x28)
-			parse_tags(fd,tag_offset,tag_len);
+			parse_crw_tags(fd,tag_offset,tag_len);
+
+		if (lseek(fd,prev_pos,SEEK_SET) < 0)
+			return 0;
+		}
+
+	return 1;
+	}
+
+uint crw_reader_t::parse_cr2_tags(const sint fd,const uint offset,
+															const uint len)
+{							// returns zero if input file is invalid
+	if (len < 2+2+2+4)
+		return 0;
+
+	if (lseek(fd,offset,SEEK_SET) < 0)
+		return 0;
+
+	const uint nr_of_tags=read_uint(fd,2);
+
+	for (uint i=0;i < nr_of_tags;i++) {
+
+		const uint tag_type=read_uint(fd,2);
+		const uint tag_value_type=read_uint(fd,2);
+		const uint tag_len=read_uint(fd,4);
+
+		uint tag_value;
+		if (tag_value_type == 3 && tag_len <= 2) {
+			tag_value=read_uint(fd,2);
+			read_uint(fd,2);
+			}
+		  else
+			tag_value=read_uint(fd,4);
+
+		const uint prev_pos=(uint)lseek(fd,0,SEEK_CUR);
+
+#if 0
+		{ printf("tag 0x%x len %u  tag_value 0x%x    ",tag_type,tag_len,tag_value);
+		if (tag_len <= 128)
+			for (uint j=0;j < tag_len;j++)
+				printf(" %02x",read_uint(fd,1,tag_value + j));
+		printf("\n"); }
+#endif
+
+		if (tag_type == 0x110 && tag_len) {
+			char camera_name_buf[32];
+			const uint read_len=min(sizeof(camera_name_buf),tag_len);
+
+			lseek(fd,tag_value,SEEK_SET);
+			if (read(fd,camera_name_buf,read_len) == (sint)read_len) {
+				if (memchr(camera_name_buf,'\0',read_len) != NULL)
+					strcpy(shooting_info.camera_type,camera_name_buf);
+				}
+
+			if (!strcmp(shooting_info.camera_type,"Canon EOS 20D")) {
+				shooting_info.frame_size_mm.x=22.5;
+				shooting_info.frame_size_mm.y=15.0;
+				}
+			}
 
 		if (lseek(fd,prev_pos,SEEK_SET) < 0)
 			return 0;
@@ -286,12 +345,30 @@ uint crw_reader_t::open_file(const char * const fname)
 	if (memcmp(signature,"II",sizeof(signature)))
 		return 0;		// big-endian files are not supported for now
 
-	const uint offset=read_uint(fd,2);
-	if (offset < sizeof(signature)+4 || offset > file_size-4)
-		return 0;
+	uint offset=read_uint(fd,2);
+	if (offset == 42) {
 
-	if (!parse_tags(fd,offset,file_size-offset))
-		return 0;
+			// .CR2 file
+
+		while (1) {
+			offset=read_uint(fd,4);
+			if (offset > file_size) {
+				printf("ZZZZ %u %u\n",offset,file_size);
+				return 0;
+				}
+			if (!offset)
+				break;
+			if (!parse_cr2_tags(fd,offset,file_size-offset))
+				return 0;
+			}
+		}
+	  else {
+		if (offset < sizeof(signature)+4 || offset > file_size-4)
+			return 0;
+
+		if (!parse_crw_tags(fd,offset,file_size-offset))
+			return 0;
+		}
 
 	return 1;
 	}
