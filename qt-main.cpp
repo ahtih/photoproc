@@ -591,7 +591,7 @@ class image_window_t : public QMainWindow, public processor_t {
 				}
 
 			if (e->text() == "-") {
-				exposure_slider->slider->addStep();
+				exposure_slider->slider->subtractStep();
 				e->ignore();
 				return;
 				}
