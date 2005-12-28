@@ -582,7 +582,23 @@ class image_window_t : public QMainWindow, public processor_t {
 			e->ignore();
 			}
 
-	virtual void keyPressEvent(QKeyEvent *e)	{ key_event(e); }
+	virtual void keyPressEvent(QKeyEvent *e)
+		{
+			if (e->text() == "+") {
+				exposure_slider->slider->addStep();
+				e->ignore();
+				return;
+				}
+
+			if (e->text() == "-") {
+				exposure_slider->slider->addStep();
+				e->ignore();
+				return;
+				}
+
+			key_event(e);
+			}
+
 	virtual void keyReleaseEvent(QKeyEvent *e)	{ key_event(e); }
 
 	virtual bool event(QEvent *e);
