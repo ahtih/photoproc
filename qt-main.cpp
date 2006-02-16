@@ -565,6 +565,20 @@ class image_window_t : public QMainWindow, public processor_t {
 	static const struct output_dimensions_t {
 		const char *name;
 		vec<uint> dimensions;
+
+		QString display_string(void) const
+			{
+				const QString dim=	QString::number(dimensions.x) +
+							"x" +	QString::number(dimensions.y);
+
+				return (name != NULL) ? QString(name) + "(" + dim + ")" : dim;
+				}
+				
+		QString settings_id(void) const
+			{
+				return (name != NULL) ? QString(name) : display_string();
+				}
+				
 		} output_dimensions[];
 
 	void key_event(QKeyEvent * const e)
@@ -853,6 +867,10 @@ const image_window_t::output_dimensions_t image_window_t::output_dimensions[]={
 		{"A4 Frontier",		{3570,2516}},
 		{"15x23 Frontier",	{2752,1830}},
 		{"10x15 Frontier",	{1818,1228}},
+		{NULL,				{1280,1024}},
+		{NULL,				{1024,768}},
+		{NULL,				{800,600}},
+		{NULL,				{640,480}},
 		};
 
 void image_widget_t::ensure_correct_size(void)
@@ -1017,11 +1035,9 @@ image_window_t::image_window_t(QApplication * const app) :
 								SETTINGS_PREFIX "selected_target_dimensions");
 
 	for (uint i=0;i < lenof(output_dimensions);i++) {
-		const QString name=QString(output_dimensions[i].name);
-		crop_target_combobox->insertItem(name +
-			" (" + QString::number(output_dimensions[i].dimensions.x) +
-			"x"  + QString::number(output_dimensions[i].dimensions.y) + ")");
-		if (name == selected_target_dimensions)
+		crop_target_combobox->insertItem(
+									output_dimensions[i].display_string());
+		if (output_dimensions[i].settings_id() == selected_target_dimensions)
 			crop_target_combobox->setCurrentItem(i);
 		}}
 
@@ -1146,7 +1162,7 @@ void file_save_options_dialog_t::accept(void)
 void image_window_t::target_dimensions_changed(void)
 {
 	settings.writeEntry(SETTINGS_PREFIX "selected_target_dimensions",
-				output_dimensions[crop_target_combobox->currentItem()].name);
+		output_dimensions[crop_target_combobox->currentItem()].settings_id());
 	update_crop_view_label();
 	}
 
