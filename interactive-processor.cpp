@@ -559,6 +559,7 @@ void interactive_image_processor_t::do_fullres_processing(
 		}
 
 	output_img.depth(8);
+	output_img.quality(75);
 	output_img.write(fname);
 	}
 
