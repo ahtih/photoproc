@@ -692,7 +692,8 @@ class image_window_t : public QMainWindow, public processor_t {
 					save_fname.prepend(last_save_directory + "/");
 
 				fname=QFileDialog::getSaveFileName(save_fname,
-						"BMP files (*.bmp)",this,"save as dialog","Save As");
+								"BMP files (*.bmp);;JPG files (*.jpg)",
+								this,"save as dialog","Save As");
 
 				if (!QFileInfo(fname).isDir())
 					break;
