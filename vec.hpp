@@ -35,7 +35,37 @@ struct vec {
 			y=tmp;
 			return *this;
 			}
+
+	vec<T> operator + (const vec<T> &b) const
+		{
+			const vec<T> dest={x+b.x,y+b.y};
+			return dest;
+			}
+
+	vec<T> operator - (const vec<T> &b) const
+		{
+			const vec<T> dest={x-b.x,y-b.y};
+			return dest;
+			}
+
+	void operator += (const vec<T> &b)
+		{
+			x+=b.x;
+			y+=b.y;
+			}
+
+	float manhattan_distance_to(const vec<T> &b) const
+		{	return fabs(x-b.x) + fabs(y-b.y); }
+
+	T len_square(void) const { return x*x + y*y; }
 	};
+
+#define vec_mul_with_const(const_type) template <class T> \
+		vec<T> operator * (const vec<T> &a,const const_type b) { \
+		const vec<T> dest={(T)(a.x * b),(T)(a.y * b)}; \
+		return dest; }
+vec_mul_with_const(uint)
+vec_mul_with_const(float)
 
 template<class T> struct vec3d {
 	T	x;
