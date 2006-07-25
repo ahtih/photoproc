@@ -762,6 +762,16 @@ class image_window_t : public QMainWindow, public processor_t {
 				}
 			}
 
+	void delete_file(void)
+		{
+		if (QMessageBox::information(this,MESSAGE_BOX_CAPTION,
+				"Delete current image file?",
+				QMessageBox::Yes,QMessageBox::No |
+							QMessageBox::Default | QMessageBox::Escape) ==
+													QMessageBox::Yes)
+			QFile::remove(image_fname);
+		}
+
 	void update_crop_view_label(void)
 		{
 			if (image_fname.isEmpty()) {
@@ -1083,6 +1093,8 @@ image_window_t::image_window_t(QApplication * const app) :
 					this,SLOT(open_next_numbered_image()),CTRL + Key_N));
 	file_menu_load_save_ids.append(file_menu.insertItem("Save &As..",
 					this,SLOT(save_as()),CTRL + Key_A));
+	file_menu_load_save_ids.append(file_menu.insertItem("&Delete file",
+					this,SLOT(delete_file()),CTRL + Key_D));
 	file_menu.insertItem("E&xit",
 					app,SLOT(quit()),CTRL + Key_Q);
 	file_menu.insertSeparator();
