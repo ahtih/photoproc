@@ -29,6 +29,7 @@
 
 #include "processing.hpp"
 #include "interactive-processor.hpp"
+#include "color-patches-detector.hpp"
 
 #define PHOTOPROC_VERSION			"0.96"
 
@@ -318,6 +319,70 @@ class image_widget_t : public QWidget {
 			return offset;
 			}
 
+	static void draw_test_table(QPaintDevice * const pd)
+		{
+			QPainter qp;
+			qp.begin(pd);
+
+			const uint W=(uint)qp.window().size().width();
+			const uint H=(uint)qp.window().size().height();
+
+			const uint N=8;
+
+			const uint M=2*(N-1);
+			const uint nr_of_white_columns=N-1-3;
+
+			const uint patch_x_size=W*39/(M*40) - 1;
+			const uint patch_y_size=H*39/(M*40) - 1;
+
+			for (uint x=0;x < N-1;x++) {
+				for (uint y=0;y < N-1;y++) {
+					qp.fillRect((x+N-1) * W/M,
+								(y    ) * H/M,
+							patch_x_size,patch_y_size,
+							QColor(	0,
+									(x+1) * 0xff / (N-1),
+									(y+1) * 0xff / (N-1)));
+
+					qp.fillRect((x    ) * W/M,
+								(y+N-1) * H/M,
+							patch_x_size,patch_y_size,
+							QColor(	(N-1-y) * 0xff / (N-1),
+									(N-1-x) * 0xff / (N-1),
+									0));
+
+					qp.fillRect((x+N-1) * W/M,
+								(y+N-1) * H/M,
+							patch_x_size,patch_y_size,
+							QColor(	(N-1-y) * 0xff / (N-1),
+									0,
+									(x+1) * 0xff / (N-1)));
+					}
+
+				qp.fillRect( (nr_of_white_columns-2) * W/M,
+						x * H/M,patch_x_size,patch_y_size,
+						QColor(	(x+1) * 0xff / (N-1),0,0));
+
+				qp.fillRect((nr_of_white_columns-1) * W/M,
+						x * H/M,patch_x_size,patch_y_size,
+						QColor(	0,(x+1) * 0xff / (N-1),0));
+
+				qp.fillRect((nr_of_white_columns+2) * W/M,
+						x * H/M,patch_x_size,patch_y_size,
+						QColor( 0,0,(x+1) * 0xff / (N-1)));
+
+				for (uint i=0;i < nr_of_white_columns;i++) {
+					const uint c=(x+(nr_of_white_columns-1-i)*(N-1)) *
+									0xff / (nr_of_white_columns*(N-1)-1);
+					uint xcoord=i;
+					if (i >= nr_of_white_columns-2)
+						xcoord+=2;
+					qp.fillRect(xcoord * W/M,x * H/M,
+							patch_x_size,patch_y_size,QColor(c,c,c));
+					}
+				}
+			}
+
 	void do_bitblt(void)
 		{
 			const vec<uint> offset=get_image_offset();
@@ -327,22 +392,8 @@ class image_widget_t : public QWidget {
 											QRegion::Rectangle)));
 			bitBlt(this,offset.x,offset.y,&qpixmap);
 
-			/*
-			if (qpixmap.width() <= 1) {
-				QPainter qp;
-				qp.begin(this);
-				const uint x_steps=12;
-				const uint y_steps=12;
-				for (uint x=0;x < x_steps;x++)
-					for (uint y=0;y < y_steps;y++) {
-						qp.fillRect(x * width() / x_steps,
-								y * height() / y_steps,
-								width() / x_steps - 1,height() / y_steps - 1,
-								QColor(	0,
-										y * 0xff / (y_steps-1),
-										x * 0xff / (x_steps-1)));
-						}
-				} */
+			if (qpixmap.width() <= 1)
+				draw_test_table(this);
 			}
 
 	protected:
@@ -1489,7 +1540,19 @@ int main(sint argc,char **argv)
 	QStringList fnames;
 	for (uint i=1;i < (uint)app.argc();i++) {
 		if (app.argv()[i] == QString("-matrix")) {
-			optimize_transfer_matrix(stdin);
+
+			if (i+1 < (uint)app.argc()) {
+				Magick::PixelPacket dest[14*14];
+				const vec<uint> nr_of_patches={14,14};
+				Magick::Image img(app.argv()[i+1]);
+				color_patches_detector_t detector;
+				detector.detect(img,nr_of_patches,dest);
+				for (uint i=0;i < 14*14;i++)
+					printf("%u,%u,%u\n",
+									dest[i].red,dest[i].green,dest[i].blue);
+				}
+			  else
+				optimize_transfer_matrix(stdin);
 			return 0;
 			}
 

@@ -1,3 +1,25 @@
+# ImageMagick for armv5tel-cacko-linux is configured with:
+#
+# ./configure LDFLAGS=-L/opt/cross/arm/3.4.4-xscale-softvfp/armv5tel-cacko-linux/lib
+#   CXXFLAGS=-fno-rtti
+#   CC=/opt/cross/arm/3.4.4-xscale-softvfp/bin/armv5tel-linux-gcc
+#   CXX=/opt/cross/arm/3.4.4-xscale-softvfp/bin/armv5tel-linux-g++
+#   --disable-shared
+#   --disable-largefile --without-threads --without-perl --without-bzlib
+#   --without-dps  --without-gvc --without-jbig --without-jbig --without-jpeg
+#   --without-jp2 --without-lcms --without-png --without-tiff --without-ttf
+#   --without-wmf --without-xml --without-zlib --without-x
+#   --with-quantum-depth=8
+#   --host=armv5tel-cacko-linux --build=i686-host-linux-gnu
+#   --target=armv5tel-cacko-linux
+#   --prefix=/opt/cross/arm/3.4.4-xscale-softvfp/ImageMagick
+#   --program-prefix=
+
+# QTDIR=/opt/cross/arm/3.4.4-xscale-softvfp/armv5tel-cacko-linux/qt
+# CPP=/opt/cross/arm/3.4.4-xscale-softvfp/bin/armv5tel-linux-g++
+# CFLAGS += -DPHOTOPROC_ALWAYS_USE_HALFRES
+# MAGICKCPP_CONFIG_PREFIX = PATH=/opt/cross/arm/3.4.4-xscale-softvfp/ImageMagick/bin:$$PATH 
+
 ###########################################################################
 # Release procedure:
 #
@@ -9,8 +31,8 @@
 ###########################################################################
 
 MOC_CPP_SRCS = qt-main.cpp
-CPP_SRCS = processing.cpp interactive-processor.cpp
-HEADERS = processing.hpp interactive-processor.hpp vec.hpp
+CPP_SRCS = processing.cpp interactive-processor.cpp color-patches-detector.cpp
+HEADERS = processing.hpp interactive-processor.hpp color-patches-detector.hpp vec.hpp
 DOCFILES = LICENSE
 
 PROG = photoproc
@@ -19,22 +41,23 @@ prefix ?= /usr
 bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
 
-CFLAGS += -O3 -fomit-frame-pointer
-CFLAGS += -Wall
+CFLAGS += -O3 -fomit-frame-pointer -fno-rtti
+CFLAGS += -Wall -Wunused-parameter
 CFLAGS += -D_GNU_SOURCE -D_THREAD_SAFE -enable-threads
 
 CFLAGS += -I$(QTDIR)/include -I$(QTDIR)/mkspecs/default -I/usr/include/freetype2
 CFLAGS += -D_REENTRANT -DQT_NO_DEBUG -DQT_THREAD_SUPPORT
-LDADD += -Wl,-rpath,$(QTDIR)/lib -L$(QTDIR)/lib -L/usr/X11R6/lib -lpthread -lXext -lX11 -lm -lqt-mt
+LDADD += -L/usr/X11R6/lib
+LDADD += -Wl,-rpath,$(QTDIR)/lib -L$(QTDIR)/lib -lpthread -lXext -lX11 -lm -lqt-mt
 
 CPP=g++
-LD=g++
+LD=$(CPP)
 MOC=$(QTDIR)/bin/moc
 
 .SUFFIXES: .moc .o
 
 .cpp.o:
-	$(CPP) -c $(CFLAGS) `Magick++-config --cxxflags --cppflags` $<
+	$(CPP) -c $(CFLAGS) `$(MAGICKCPP_CONFIG_PREFIX)Magick++-config --cxxflags --cppflags` $<
 .cpp.moc:
 	$(MOC) $< -o $@ 
 
@@ -46,7 +69,7 @@ OBJS = $(CPP_SRCS:%.cpp=%.o) $(MOC_CPP_SRCS:%.cpp=%.o)
 all: $(PROG)
 
 $(PROG): $(MOCS) $(OBJS)
-	$(LD) $(LDFLAGS) `Magick++-config --ldflags --libs` -o $@ $(OBJS) $(LDADD)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS) `$(MAGICKCPP_CONFIG_PREFIX)Magick++-config --ldflags --libs` $(LDADD)
 
 # The idea of photoproc static linking is somewhat limited, because
 # ImageMagick does not lend itself well to static linking -- it requires
@@ -72,7 +95,7 @@ $(PROG)-static: QTDIR=$(STATIC_QTDIR)
 
 $(PROG)-static: $(STATIC_QTDIR)/lib/libqt-mt.a $(MOCS) $(OBJS)
 	$(LD) -o $@ $(OBJS) -L/usr/X11R6/lib \
-		`Magick++-config --ldflags --libs` \
+		`$(MAGICKCPP_CONFIG_PREFIX)Magick++-config --ldflags --libs` \
 		$(QTDIR)/lib/libqt-mt.a \
 		-lpthread -lXext -lX11 -lm -lc -lc_nonshared -lpng
 
