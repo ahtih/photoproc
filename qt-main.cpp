@@ -248,7 +248,8 @@ QString processor_t::start_loading_image(const QString &fname,
 		args << "dcraw";
 		args << "-3";			// 48-bit .psd output
 		args << "-c";			// output to stdout
-		args << "-b" << "3.8";	// 3.8x brightness
+		// args << "-b" << "3.8";	// 3.8x brightness
+		args << "-m";			// don't apply color matrix
 
 #ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 		if (!load_fullres) {

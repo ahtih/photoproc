@@ -450,45 +450,24 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 	vec3d<double> B_data=vec3d<double>::make(0,0,1);
 
 	if (!strcmp(shooting_info.camera_type,"Canon EOS D30")) {
-
-		/* measured transfer matrix for Canon D30:
-			d30_R = 1     * screen_R + 0.264 * screen_G + 0.033 * screen_B
-			d30_G = 0.152 * screen_R + 1     * screen_G + 0.292 * screen_B
-			d30_B = 0.047 * screen_R + 0.411 * screen_G + 1     * screen_B
-			*/
-
-		R_data=vec3d<double>::make(1    ,0.152,0.047        );
-		G_data=vec3d<double>::make(0.264,1    ,0.411 /*0.1*/);
-		B_data=vec3d<double>::make(0.033,0.292,1            );
+		// new matrix for dcraw 7.93 -m, but without normalising
+		R_data=vec3d<double>::make(1    ,0.093,0.010);
+		G_data=vec3d<double>::make(0.315,1    ,0.357);
+		B_data=vec3d<double>::make(0.003,0.332,1    );
 		}
 
 	if (!strcmp(shooting_info.camera_type,"Canon EOS 10D")) {
+		// new matrix for dcraw 7.93 -m, with normalising
+		R_data=vec3d<double>::make(1    ,0.104 ,0.047);
+		G_data=vec3d<double>::make(0.383,1     ,0.386);
+		B_data=vec3d<double>::make(0.039,0.301 ,  1  );
+		}
 
-		/*	Canon 10D:
-
-			black		116		68		62
-			red-80		7314	744		372			5813	580		264
-			red-ff		36403	3446	1530		28011	2794	1387
-			green-80	3366	8404	3728		2569	6486	2851
-			green-ff	15766	40224	18143		13429	33977	15258
-			blue-80		338		1799	6807		235		1394	5340
-			blue-ff		1491	9858	37642		1168	8065	31079
-			white-ff	48663	49796	53424
-
-			based on high values:
-			10d_R = 1     * screen_R + 0.390 * screen_G + 0.037 * screen_B
-			10d_G = 0.093 * screen_R + 1     * screen_G + 0.261 * screen_B
-			10d_B = 0.040 * screen_R + 0.450 * screen_G + 1     * screen_B
-
-			based on low values:
-			10d_R = 1     * screen_R + 0.393 * screen_G + 0.034 * screen_B
-			10d_G = 0.098 * screen_R + 1     * screen_G + 0.258 * screen_B
-			10d_B = 0.047 * screen_R + 0.448 * screen_G + 1     * screen_B
-			*/
-
-		R_data=vec3d<double>::make(1    , 0.12  ,0.04);
-		G_data=vec3d<double>::make(0.39,  1     ,0.446 /*0.1*/);
-		B_data=vec3d<double>::make(0.037, 0.261 ,  1  );
+	if (!strcmp(shooting_info.camera_type,"Canon EOS 20D")) {
+		// new matrix for dcraw 7.93 -m, with normalising
+		R_data=vec3d<double>::make(1    ,0.120 ,0.040);
+		G_data=vec3d<double>::make(0.468,1     ,0.269);
+		B_data=vec3d<double>::make(0.043,0.243 ,  1  );
 		}
 
 	R_nonlinear_scaling=1.0 / (1-R_nonlinear_transfer_coeff*R_nonlinear_mult);
