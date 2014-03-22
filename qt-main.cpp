@@ -1070,12 +1070,12 @@ image_window_t::image_window_t(QApplication * const app) :
 	color_balance_view_hbox->setSpacing(10);
 
 	red_blue_balance_slider=new two_color_balance_slider_t(
-						color_balance_view_hbox,"Red/blue coeffs",0.3,1.7,1);
+						color_balance_view_hbox,"Red/blue coeffs",0.02,1.7,1);
 	connect(red_blue_balance_slider->slider,SIGNAL(valueChanged(int)),
 									SLOT(color_and_levels_params_changed()));
 
 	green_balance_slider=new slider_t(color_balance_view_hbox,
-											"Green coeff",0.3,1.7,1,"%.2f");
+											"Green coeff",0.05,1.7,1,"%.2f");
 	connect(green_balance_slider->slider,SIGNAL(valueChanged(int)),
 									SLOT(color_and_levels_params_changed()));
 
