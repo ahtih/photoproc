@@ -3,6 +3,7 @@
 */
 
 #include <string.h>
+#include <unistd.h>
 #include "processing.hpp"
 #include "interactive-processor.hpp"
 

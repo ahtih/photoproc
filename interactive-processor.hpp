@@ -3,6 +3,7 @@
 */
 
 #include <qmutex.h>
+#include <qwaitcondition.h>
 #include <qthread.h>
 
 class SyncQueue {

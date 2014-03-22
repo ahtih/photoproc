@@ -4,17 +4,18 @@
 
 #include <qapplication.h>
 #include <qclipboard.h>
-#include <qpopupmenu.h>
+#include <q3popupmenu.h>
 #include <qmenubar.h>
-#include <qmainwindow.h>
+#include <q3mainwindow.h>
 #include <qcolor.h>
 #include <qregexp.h>
 #include <qpixmap.h>
 #include <qlayout.h>
+#include <q3gridlayout.h>
 #include <qlabel.h>
 #include <qslider.h>
-#include <qhbox.h>
-#include <qvbox.h>
+#include <q3hbox.h>
+#include <q3vbox.h>
 #include <qpainter.h>
 #include <qpushbutton.h>
 #include <qcombobox.h>
@@ -22,10 +23,13 @@
 #include <qcheckbox.h>
 #include <qimage.h>
 #include <qthread.h>
-#include <qprocess.h>
-#include <qfiledialog.h>
+#include <q3process.h>
+#include <q3filedialog.h>
 #include <qmessagebox.h>
 #include <qsettings.h>
+#include <qevent.h>
+
+#include <unistd.h>
 
 #include "processing.hpp"
 #include "interactive-processor.hpp"
@@ -44,7 +48,7 @@
 #define POST_EVENT QApplication::postEvent
 #endif
 
-class external_reader_process_t : public QProcess {
+class external_reader_process_t : public Q3Process {
 	Q_OBJECT
 
 	interactive_image_processor_t * const processor;
@@ -105,7 +109,7 @@ class external_reader_process_t : public QProcess {
 							interactive_image_processor_t::LOAD_FROM_MEMORY,
 				const QString &_shooting_info_fname=(const char *)NULL) :
 
-				QProcess(args,NULL,"external image reader process"),
+				Q3Process(args,NULL,"external image reader process"),
 				processor(_processor),
 				notification_receiver(_notification_receiver),
 				operation_type(_operation_type),
@@ -114,13 +118,13 @@ class external_reader_process_t : public QProcess {
 			if (_shooting_info_fname != NULL)
 				shooting_info_fname=_shooting_info_fname;
 
-			setCommunication(QProcess::Stdout | QProcess::Stderr);
+			setCommunication(Q3Process::Stdout | Q3Process::Stderr);
 
 			connect(this,SIGNAL(readyReadStdout()),SLOT(read_more_data()));
 			connect(this,SIGNAL(processExited()),SLOT(process_finished()));
 			}
 
-	uint launch(void) { return QProcess::launch(""); }
+	uint launch(void) { return Q3Process::launch(QString("")); }
 	};
 
 class processor_t :
@@ -257,7 +261,7 @@ QString processor_t::start_loading_image(const QString &fname,
 			args << "-h";			// half-res image for fast processing
 
 			QFile f(actual_fname_to_load);
-			if (!f.open(IO_Raw|IO_ReadOnly)) {
+			if (!f.open(QIODevice::Unbuffered|QIODevice::ReadOnly)) {
 				QString str;
 				return str.sprintf("Error opening file %s",
 										actual_fname_to_load.utf8().data());
@@ -410,7 +414,7 @@ class image_widget_t : public QWidget {
 	image_widget_t(QWidget * const parent,
 									image_window_t * const _image_window) :
 			QWidget(parent), image_window(_image_window), qimage(1,1,32)
-			{ setEraseColor(black); }
+			{ setEraseColor(Qt::black); }
 
 	void ensure_correct_size(void);
 
@@ -421,7 +425,7 @@ class image_widget_t : public QWidget {
 			}
 	};
 
-class slider_t : public QHBox {
+class slider_t : public Q3HBox {
 	Q_OBJECT
 
 	const QString display_format;
@@ -454,7 +458,7 @@ class slider_t : public QHBox {
 					const float min_value,const float max_value,
 					const float default_value,
 					const char * const _display_format="%.2f") :
-							QHBox(parent), display_format(_display_format)
+							Q3HBox(parent), display_format(_display_format)
 		{
 			setSpacing(5);
 			new QLabel(QString(name) + ":",this);
@@ -465,15 +469,15 @@ class slider_t : public QHBox {
 								(sint)floor(max_value*100 + 0.5),10,
 								(sint)floor(default_value*100 + 0.5),
 													Qt::Horizontal,this);
-			slider->setFocusPolicy(static_cast<QWidget::FocusPolicy>(
-									QWidget::TabFocus|QWidget::ClickFocus));
+			slider->setFocusPolicy(static_cast<Qt::FocusPolicy>(
+									Qt::TabFocus|Qt::ClickFocus));
 
 			connect(slider,SIGNAL(valueChanged(int)),SLOT(value_changed()));
 			}
 
 	virtual void polish(void)
 		{
-			QHBox::polish();
+			Q3HBox::polish();
 
 			QFont font;
 			QFontMetrics font_metrics(font);
@@ -502,14 +506,14 @@ class two_color_balance_slider_t : public slider_t {
 			}
 	};
 
-class crop_spin_box_t : public QHBox {
+class crop_spin_box_t : public Q3HBox {
 	Q_OBJECT
 	public:
 
 	QSpinBox *spinbox;
 
 	crop_spin_box_t(QWidget * const parent,const char * const name) :
-															QHBox(parent)
+															Q3HBox(parent)
 		{
 			setSpacing(5);
 			new QLabel(QString(name) + ":",this);
@@ -583,7 +587,7 @@ class file_save_options_dialog_t : public QDialog {
 							const QString _fname,const vec<uint> &resize_size);
 	};
 
-class image_window_t : public QMainWindow, public processor_t {
+class image_window_t : public Q3MainWindow, public processor_t {
 	Q_OBJECT
 	protected:
 
@@ -594,21 +598,21 @@ class image_window_t : public QMainWindow, public processor_t {
 	uint fullres_processing_do_resize;		// 0 or 1
 	float fullres_processing_USM_radius;	// <=0 if no unsharp mask
 
-	QValueList<sint> file_menu_load_save_ids;
+	Q3ValueList<sint> file_menu_load_save_ids;
 
-	QPopupMenu file_menu;
+	Q3PopupMenu file_menu;
 	image_widget_t *image_widget;
 
-	QHBox *normal_view_hbox;
+	Q3HBox *normal_view_hbox;
 	slider_t *contrast_slider,*exposure_slider;
 	slider_t *black_level_slider,*white_clipping_slider;
 
-	QHBox *color_balance_view_hbox;
+	Q3HBox *color_balance_view_hbox;
 	two_color_balance_slider_t *red_blue_balance_slider;
 	slider_t *green_balance_slider;
 	QCheckBox *grayscale_checkbox;
 
-	QHBox *crop_view_hbox;
+	Q3HBox *crop_view_hbox;
 	QComboBox *crop_target_combobox;
 	QLabel *crop_info_qlabel;
 	crop_spin_box_t *top_crop,*bottom_crop,*left_crop,*right_crop;
@@ -636,8 +640,8 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	void key_event(QKeyEvent * const e)
 		{
-			const uint shift_before=!!(e->state() & Qt::ShiftButton);
-			const uint shift_after=!!(e->stateAfter() & Qt::ShiftButton);
+			const uint shift_before=!!(e->state() & Qt::ShiftModifier);
+			const uint shift_after=!!(e->stateAfter() & Qt::ShiftModifier);
 
 			if (shift_before && !shift_after)
 				QApplication::clipboard()->setText(
@@ -671,7 +675,7 @@ class image_window_t : public QMainWindow, public processor_t {
 	virtual bool event(QEvent *e);
 	virtual void moveEvent(QMoveEvent *e)
 		{
-			QMainWindow::moveEvent(e);
+			Q3MainWindow::moveEvent(e);
 			if (isVisible() && isActiveWindow()) {
 				settings.writeEntry(SETTINGS_PREFIX  "pos/x",pos().x());
 				settings.writeEntry(SETTINGS_PREFIX  "pos/y",pos().y());
@@ -680,7 +684,7 @@ class image_window_t : public QMainWindow, public processor_t {
 
 	virtual void resizeEvent(QResizeEvent *e)
 		{
-			QMainWindow::resizeEvent(e);
+			Q3MainWindow::resizeEvent(e);
 			if (isVisible() && isActiveWindow()) {
 				settings.writeEntry(SETTINGS_PREFIX "size/x",size().width());
 				settings.writeEntry(SETTINGS_PREFIX "size/y",size().height());
@@ -707,7 +711,7 @@ class image_window_t : public QMainWindow, public processor_t {
 			QString fname=
 				settings.readEntry(SETTINGS_PREFIX "recent_images/1");
 			while (1) {
-				fname=QFileDialog::getOpenFileName(fname,
+				fname=Q3FileDialog::getOpenFileName(fname,
 					"image files (*.bmp *.tif *.tiff *.psd *.crw *.CRW "
 									"*.cr2 *.CR2 *.NEF *.MRW *.ORF *.DCR)",
 					this,"open image dialog","Open image");
@@ -744,7 +748,7 @@ class image_window_t : public QMainWindow, public processor_t {
 				if (!last_save_directory.isEmpty())
 					save_fname.prepend(last_save_directory + "/");
 
-				fname=QFileDialog::getSaveFileName(save_fname,
+				fname=Q3FileDialog::getSaveFileName(save_fname,
 								"BMP files (*.bmp);;JPG files (*.jpg)",
 								this,"save as dialog","Save As");
 
@@ -990,7 +994,7 @@ void image_widget_t::mousePressEvent(QMouseEvent *e)
 
 	const QRgb screen_rgb=qimage.pixel(pos.x,pos.y);
 
-	if ((e->state() & Qt::ShiftButton) != 0)
+	if ((e->state() & Qt::ShiftModifier) != 0)
 		image_window->add_to_spot_values_clipboard(
 								QString::number(values_in_file[0]) + "\t" +
 								QString::number(values_in_file[1]) + "\t" +
@@ -1024,14 +1028,14 @@ void image_widget_t::resizeEvent(QResizeEvent *)
 	}
 
 image_window_t::image_window_t(QApplication * const app) :
-			QMainWindow(NULL,"image_window"), processor_t(this),
+			Q3MainWindow(NULL,"image_window"), processor_t(this),
 			fullres_processing_do_resize(0),
 			fullres_processing_USM_radius(-1.0f), file_menu(this)
 {
-	QVBox * const qvbox=new QVBox(this);
+	Q3VBox * const qvbox=new Q3VBox(this);
 	setCentralWidget(qvbox);
 
-	QHBox * const qhbox=new QHBox(qvbox);
+	Q3HBox * const qhbox=new Q3HBox(qvbox);
 
 		/*******************************/
 		/*****                     *****/
@@ -1039,7 +1043,7 @@ image_window_t::image_window_t(QApplication * const app) :
 		/*****                     *****/
 		/*******************************/
 
-	normal_view_hbox=new QHBox(qhbox);
+	normal_view_hbox=new Q3HBox(qhbox);
 	normal_view_hbox->setSpacing(10);
 
 	contrast_slider=new slider_t(normal_view_hbox,"Contrast",0.5,4,1.3,"%.2fx");
@@ -1066,7 +1070,7 @@ image_window_t::image_window_t(QApplication * const app) :
 		/*****                            *****/
 		/**************************************/
 
-	color_balance_view_hbox=new QHBox(qhbox);
+	color_balance_view_hbox=new Q3HBox(qhbox);
 	color_balance_view_hbox->setSpacing(10);
 
 	red_blue_balance_slider=new two_color_balance_slider_t(
@@ -1089,7 +1093,7 @@ image_window_t::image_window_t(QApplication * const app) :
 		/*****                   *****/
 		/*****************************/
 
-	crop_view_hbox=new QHBox(qhbox);
+	crop_view_hbox=new Q3HBox(qhbox);
 	crop_view_hbox->setSpacing(10);
 
 	crop_target_combobox=new QComboBox((bool)0,crop_view_hbox);
@@ -1140,30 +1144,30 @@ image_window_t::image_window_t(QApplication * const app) :
 	menuBar()->insertItem("&File",&file_menu);
 
 	file_menu_load_save_ids.append(file_menu.insertItem("&Open image..",
-					this,SLOT(open_file_dialog()),CTRL + Key_O));
+					this,SLOT(open_file_dialog()),Qt::CTRL + Qt::Key_O));
 	file_menu_load_save_ids.append(file_menu.insertItem(
 					"Open &next numbered image",
-					this,SLOT(open_next_numbered_image()),CTRL + Key_N));
+					this,SLOT(open_next_numbered_image()),Qt::CTRL + Qt::Key_N));
 	file_menu_load_save_ids.append(file_menu.insertItem("Save &As..",
-					this,SLOT(save_as()),CTRL + Key_A));
+					this,SLOT(save_as()),Qt::CTRL + Qt::Key_A));
 	file_menu_load_save_ids.append(file_menu.insertItem("&Delete file",
-					this,SLOT(delete_file()),CTRL + Key_D));
+					this,SLOT(delete_file()),Qt::CTRL + Qt::Key_D));
 	file_menu.insertItem("E&xit",
-					app,SLOT(quit()),CTRL + Key_Q);
+					app,SLOT(quit()),Qt::CTRL + Qt::Key_Q);
 	file_menu.insertSeparator();
 
 	connect(&file_menu,SIGNAL(activated(int)),SLOT(load_recent_image(int)));
 
-	{ QPopupMenu * const view_menu=new QPopupMenu(this);
-	view_menu->insertItem("&Normal",this,SLOT(select_normal_view()),Key_F5);
+	{ Q3PopupMenu * const view_menu=new Q3PopupMenu(this);
+	view_menu->insertItem("&Normal",this,SLOT(select_normal_view()),Qt::Key_F5);
 	view_menu->insertItem("Color &Balance",this,
-								SLOT(select_color_balance_view()),Key_F6);
-	view_menu->insertItem("&Crop",this,SLOT(select_crop_view()),Key_F7);
-	view_menu->insertItem("Shooting &Info",this,SLOT(shooting_info_dialog()),CTRL + Key_I);
+								SLOT(select_color_balance_view()),Qt::Key_F6);
+	view_menu->insertItem("&Crop",this,SLOT(select_crop_view()),Qt::Key_F7);
+	view_menu->insertItem("Shooting &Info",this,SLOT(shooting_info_dialog()),Qt::CTRL + Qt::Key_I);
 
 	menuBar()->insertItem("&View",view_menu); }
 
-	{ QPopupMenu * const help_menu=new QPopupMenu(this);
+	{ Q3PopupMenu * const help_menu=new Q3PopupMenu(this);
 	help_menu->insertItem("&About",this,SLOT(display_help_about()));
 	menuBar()->insertItem("&Help",help_menu); }
 
@@ -1178,12 +1182,12 @@ file_save_options_dialog_t::file_save_options_dialog_t(
 				image_window_t * const _image_window,const QString _fname,
 												const vec<uint> &resize_size) :
 						QDialog(_image_window,"file_save_options_dialog_t",
-									TRUE,WDestructiveClose),
+									TRUE,Qt::WDestructiveClose),
 						image_window(_image_window), fname(_fname)
 {
 	setCaption("Image Save options");
 
-	QGridLayout * const grid=new QGridLayout(this,3,2,30,30);
+	Q3GridLayout * const grid=new Q3GridLayout(this,3,2,30,30);
 
 	const QString resize_size_str=QString::number(resize_size.x) + "x" +
 											QString::number(resize_size.y);
@@ -1193,7 +1197,7 @@ file_save_options_dialog_t::file_save_options_dialog_t(
 			&image_window->settings,SETTINGS_PREFIX "resize_when_saving");
 	grid->addMultiCellWidget(resize_checkbox,0,0,0,1);
 
-	QHBox * const USM_hbox=new QHBox(this);
+	Q3HBox * const USM_hbox=new Q3HBox(this);
 
 	unsharp_mask_checkbox=new persistent_checkbox_t(
 			"Apply Unsharp Mask with radius",USM_hbox,
@@ -1426,7 +1430,7 @@ void image_window_t::set_caption(void)
 
 		// enable/disable file load/save controls
 
-	{ QValueList<sint>::iterator it;
+	{ Q3ValueList<sint>::iterator it;
     for (it=file_menu_load_save_ids.begin();
 									it != file_menu_load_save_ids.end();it++)
 		file_menu.setItemEnabled(*it,!processor.operation_pending_count &&
@@ -1454,7 +1458,7 @@ void image_window_t::check_processing(void)
 bool image_window_t::event(QEvent *e)
 {
 	if (e->type() != QEvent::User)
-		return QMainWindow::event(e);
+		return Q3MainWindow::event(e);
 
 		// operation_completed() event
 

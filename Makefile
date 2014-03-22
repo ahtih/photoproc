@@ -37,6 +37,8 @@ DOCFILES = LICENSE
 
 PROG = photoproc
 
+QTDIR ?= /usr
+
 prefix ?= /usr
 bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
@@ -46,9 +48,9 @@ CFLAGS += -Wall -Wunused-parameter
 CFLAGS += -D_GNU_SOURCE -D_THREAD_SAFE -enable-threads
 
 CFLAGS += -I$(QTDIR)/include -I$(QTDIR)/mkspecs/default -I/usr/include/freetype2
-CFLAGS += -D_REENTRANT -DQT_NO_DEBUG -DQT_THREAD_SUPPORT
-LDADD += -L/usr/X11R6/lib
-LDADD += -Wl,-rpath,$(QTDIR)/lib -L$(QTDIR)/lib -lpthread -lXext -lX11 -lm -lqt-mt
+CFLAGS += -I$(QTDIR)/include/qt4/Qt -I$(QTDIR)/include/qt4
+CFLAGS += -D_REENTRANT -DQT_NO_DEBUG -DQT_THREAD_SUPPORT -DQT3_SUPPORT
+LDADD += -lQtCore -lQtGui -lQt3Support -lpthread -lXext -lX11 -lm
 
 CPP=g++
 LD=$(CPP)
