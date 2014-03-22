@@ -1548,6 +1548,7 @@ int main(sint argc,char **argv)
 		if (app.argv()[i] == QString("-matrix")) {
 
 			if (i+1 < (uint)app.argc()) {
+				Magick::InitializeMagick(NULL);
 				Magick::PixelPacket dest[14*14];
 				const vec<uint> nr_of_patches={14,14};
 				Magick::Image img(app.argv()[i+1]);
