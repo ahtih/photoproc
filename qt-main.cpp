@@ -246,10 +246,11 @@ QString processor_t::start_loading_image(const QString &fname,
 						ext == "mrw" || ext == "orf" || ext == "dcr") {
 		QStringList args;
 		args << "dcraw";
-		args << "-3";			// 48-bit .psd output
+		args << "-4";			// 48-bit .PPM output
 		args << "-c";			// output to stdout
 		// args << "-b" << "3.8";	// 3.8x brightness
-		args << "-m";			// don't apply color matrix
+		args << "-M";			// don't use embedded color matrix
+		args << "-o" << "0";	// don't convert camera RGB to sRGB
 
 #ifndef PHOTOPROC_ALWAYS_USE_HALFRES
 		if (!load_fullres) {
