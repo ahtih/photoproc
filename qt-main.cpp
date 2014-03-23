@@ -1540,6 +1540,7 @@ class print_file_info_t : public QObject, public processor_t {
 
 int main(sint argc,char **argv)
 {
+	Magick::InitializeMagick(NULL);
 	QApplication app(argc,argv);
 
 	uint show_only_info=0;
@@ -1548,7 +1549,6 @@ int main(sint argc,char **argv)
 		if (app.argv()[i] == QString("-matrix")) {
 
 			if (i+1 < (uint)app.argc()) {
-				Magick::InitializeMagick(NULL);
 				Magick::PixelPacket dest[14*14];
 				const vec<uint> nr_of_patches={14,14};
 				Magick::Image img(app.argv()[i+1]);
