@@ -472,18 +472,14 @@ class slider_t : public Q3HBox {
 			slider->setFocusPolicy(static_cast<Qt::FocusPolicy>(
 									Qt::TabFocus|Qt::ClickFocus));
 
-			connect(slider,SIGNAL(valueChanged(int)),SLOT(value_changed()));
-			}
-
-	virtual void polish(void)
-		{
-			Q3HBox::polish();
-
 			QFont font;
 			QFontMetrics font_metrics(font);
 			value_display->setFont(font);
 			value_display->setFixedWidth(font_metrics.width(
 								get_value_text(slider->maxValue() / 100.0)));
+
+			connect(slider,SIGNAL(valueChanged(int)),SLOT(value_changed()));
+
 			value_changed();
 			}
 	};
