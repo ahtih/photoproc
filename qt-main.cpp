@@ -421,7 +421,7 @@ class image_widget_t : public QWidget {
 	void refresh_image(void)
 		{
 			qpixmap.convertFromImage(qimage);
-			do_bitblt();
+			update();
 			}
 	};
 
