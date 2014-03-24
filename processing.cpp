@@ -468,6 +468,11 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 		R_data=vec3d<double>::make(1    ,0.120 ,0.040);
 		G_data=vec3d<double>::make(0.468,1     ,0.269);
 		B_data=vec3d<double>::make(0.043,0.243 ,  1  );
+		/*
+		R_data=vec3d<double>::make(1    ,0.BBB ,0.FFF);
+		G_data=vec3d<double>::make(0.AAA,1     ,0.DDD);
+		B_data=vec3d<double>::make(0.EEE,0.CCC ,  1  );
+		*/
 		}
 
 	R_nonlinear_scaling=1.0 / (1-R_nonlinear_transfer_coeff*R_nonlinear_mult);
@@ -489,6 +494,12 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 	m.z_vec=(B_data * normalize_mult[2]).tofloat();
 
 	m.inverse();
+
+	/*
+	printf("%.4f %.4f %.4f\n",m.x_vec.x,m.x_vec.y,m.x_vec.z);
+	printf("%.4f %.4f %.4f\n",m.y_vec.x,m.y_vec.y,m.y_vec.z);
+	printf("%.4f %.4f %.4f\n",m.z_vec.x,m.z_vec.y,m.z_vec.z);
+	*/
 	}
 
 image_reader_t::~image_reader_t(void)
