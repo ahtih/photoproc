@@ -390,6 +390,9 @@ float color_patches_detector_t::detect(const Magick::Image &src_img,
 				(max_coords.y+1)*src_img.   rows() / basegrid_size.y - 1));
 		}}
 
+	if (norm_patch_variance < 1e-3f)
+		norm_patch_variance = 1e-3f;
+
 	delete [] small_squares;
 
 		/******************************************/
