@@ -1313,7 +1313,7 @@ static void print_error_table(const table_t &predicted_table,
 							break;
 					default:break;
 					}
-			printf("%s%*.0f",prefix,5 - strlen(prefix),
+			printf("%s%*.0f",prefix,5 - (sint)strlen(prefix),
 							t->calculate_error(predicted_table[i][j],i,j));
 			}
 		printf("\n");

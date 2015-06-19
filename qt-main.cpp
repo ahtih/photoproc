@@ -115,7 +115,7 @@ class external_reader_process_t : public Q3Process {
 				operation_type(_operation_type),
 				buf(NULL), buf_len(0), buf_used_len(0), is_finished(0)
 		{
-			if (_shooting_info_fname != NULL)
+			if (!_shooting_info_fname.isNull())
 				shooting_info_fname=_shooting_info_fname;
 
 			setCommunication(Q3Process::Stdout | Q3Process::Stderr);
@@ -320,8 +320,8 @@ class image_widget_t : public QWidget {
 
 	vec<uint> get_image_offset(void) const
 		{
-			const vec<uint> offset={( width()-qpixmap. width()) / 2,
-									(height()-qpixmap.height()) / 2};
+			const vec<uint> offset={(uint)( width()-qpixmap. width()) / 2,
+									(uint)(height()-qpixmap.height()) / 2};
 			return offset;
 			}
 
@@ -940,7 +940,7 @@ const image_window_t::output_dimensions_t image_window_t::output_dimensions[]={
 void image_widget_t::ensure_correct_size(void)
 {
 	const vec<uint> image_size=image_window->processor.get_image_size();
-	const vec<uint> window_size={width(),height()};
+	const vec<uint> window_size={(uint)width(),(uint)height()};
 
 	vec<uint> desired_size=image_size;
 	if (desired_size.x > window_size.x) {
@@ -1318,7 +1318,8 @@ void image_window_t::ensure_fullres_loaded_image(void)
 
 	image_file_data.resize(0);
 	QMessageBox::warning(this,MESSAGE_BOX_CAPTION,
-						QString("Could not write temp file ") + temp_fname +
+						QString("Could not write temp file ") +
+							QString(temp_fname) +
 							" for re-loading the image in full resolution. "
 							"The image remains loaded in half resolution",
 							QMessageBox::Ok,QMessageBox::NoButton);
