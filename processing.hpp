@@ -58,7 +58,7 @@ class image_reader_t {
 							ISO_speed=0;
 							aperture=exposure_time=focal_length_mm=-1;
 							focused_distance_m_min=focused_distance_m_max=-1;
-							frame_size_mm.x=frame_size_mm.x=-1; }
+							frame_size_mm.x=frame_size_mm.y=-1; }
 		shooting_info_t(void) { clear(); }
 		};
 	shooting_info_t shooting_info;
