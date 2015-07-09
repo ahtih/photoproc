@@ -1268,10 +1268,19 @@ struct axis_t {
 
 	float calculate_error(const float predicted_value,
 											const uint i,const uint j) const
-		{
-			return (actual_table[i][j] - predicted_value) * 100.0 * 2 /
-					(fabs(actual_table[i][j]) +
-								fabs(other_axis->actual_table[i][j]) + 1);
+		{		// Returns NAN if actual_table[i][j] is NAN
+
+			const float value=actual_table[i][j];
+			if (isnan(value) || isnan(predicted_value))
+				return NAN;
+
+			float reference_value=fabsf(value);
+			if (!isnan(other_axis->actual_table[i][j]))
+				reference_value=0.5f * (reference_value + 
+									fabsf(other_axis->actual_table[i][j]));
+
+			return (value - predicted_value) * 100.0f /
+												(reference_value + 1.0f);
 			}
 	};
 
@@ -1287,6 +1296,8 @@ static float calculate_error(const table_t &predicted_table,
 	for (uint i=!!t->increases_along_coord2;i < predicted_table.N;i++)
 		for (uint j=!t->increases_along_coord2;j < predicted_table.N;j++) {
 			const float error=t->calculate_error(predicted_table[i][j],i,j);
+			if (isnan(error))
+				continue;
 			const float weight=max(i,j);
 			sum_of_squares+=error * error * weight;
 			sum_of_weights+=weight;
@@ -1313,8 +1324,11 @@ static void print_error_table(const table_t &predicted_table,
 							break;
 					default:break;
 					}
-			printf("%s%*.0f",prefix,5 - (sint)strlen(prefix),
-							t->calculate_error(predicted_table[i][j],i,j));
+			const float error=t->calculate_error(predicted_table[i][j],i,j);
+			if (isnan(error))
+				printf("%s%*s",prefix,5 - (sint)strlen(prefix),".");
+			else
+				printf("%s%*.0f",prefix,5 - (sint)strlen(prefix),error);
 			}
 		printf("\n");
 		}
@@ -1340,6 +1354,7 @@ static float optimize_linear_coeff(float &best_error,const axis_t * const t)
 		table_t predicted_table(t->actual_table.N);
 		predict_linear_only(linear_coeff,predicted_table,t);
 		const float error=calculate_error(predicted_table,t);
+
 		if (best_error > error) {
 			best_error = error;
 			best_linear_coeff=linear_coeff;
@@ -1415,16 +1430,31 @@ static void improve_ideal_table(table_t &dest_table,
 
 	for (coord1=0;coord1 < dest_table.N;coord1++) {
 
+			// Set avg_independent and avg_dependent
+
 		float avg_independent=0,avg_dependent=0;
+
+		{ uint independent_count=0,dependent_count=0;
 		for (coord2=0;coord2 < dest_table.N;coord2++) {
-			avg_independent+=independent_table[i][j];
-			  avg_dependent+=  dependent_table[i][j];
+			if (!isnan(independent_table[i][j])) {
+				avg_independent+=independent_table[i][j];
+				independent_count++;
+				}
+			if (!isnan(dependent_table[i][j])) {
+				avg_dependent+=dependent_table[i][j];
+				dependent_count++;
+				}
 			}
-		avg_independent/=dest_table.N;
-		  avg_dependent/=dest_table.N;
+		if (!dependent_count || !independent_count)
+			continue;
+		avg_independent/=independent_count;
+		  avg_dependent/=  dependent_count; }
 
 		float sum1=0,sum2=0;
 		for (coord2=0;coord2 < dest_table.N;coord2++) {
+			if (isnan(independent_table[i][j]) ||
+											isnan(dependent_table[i][j]))
+				continue;
 			sum1+=	(independent_table[i][j] - avg_independent) *
 					(  dependent_table[i][j] -   avg_dependent);
 			sum2+=	(independent_table[i][j] - avg_independent) *
@@ -1542,11 +1572,26 @@ void optimize_transfer_matrix(FILE * const input_file)
 	{ const float X0=actual_X[0][0];
 	const float Y0=actual_Y[0][0];
 
-	for (uint i=0;i < N;i++)
+	float max_value=0.0f;
+
+	{ for (uint i=0;i < N;i++)
 		for (uint j=0;j < N;j++) {
 			actual_X[i][j]-=X0;
 			actual_Y[i][j]-=Y0;
+
+			if (max_value < actual_X[i][j])
+				max_value = actual_X[i][j];
+			if (max_value < actual_Y[i][j])
+				max_value = actual_Y[i][j];
 			}}
+
+	{ for (uint i=0;i < N;i++)
+		for (uint j=0;j < N;j++) {
+			if (actual_X[i][j] > max_value*0.999f)
+				actual_X[i][j]=NAN;
+			if (actual_Y[i][j] > max_value*0.999f)
+				actual_Y[i][j]=NAN;
+			}}}
 
 		/*************************************/
 		/*****                           *****/
