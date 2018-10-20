@@ -127,8 +127,7 @@ class external_reader_process_t : public Q3Process {
 	uint launch(void) { return Q3Process::launch(QString("")); }
 	};
 
-class processor_t :
-			private interactive_image_processor_t::notification_receiver_t {
+class processor_t : private interactive_image_processor_t::notification_receiver_t {
 	QObject * const notification_receiver;
 	external_reader_process_t *external_reader_process;
 							// NULL if no external_reader_process in progress
@@ -173,6 +172,17 @@ class processor_t :
 	QString start_loading_image(const QString &fname,const uint load_fullres,
 									const QString &temp_fname=QString::null);
 		// returns error text, or null string if no error
+
+	static QString get_image_save_basename(const QString fname,const QString save_extension)
+		{
+			QString save_fname=fname;
+			save_fname.replace(QRegExp("^.*[\\\\/]"),"");
+			save_fname.replace(QRegExp("\\.[^.]*$"),"");
+			save_fname+=".";
+			save_fname+=save_extension;
+
+			return save_fname;
+			}
 
 	QString get_shooting_info_text(void)
 		{
@@ -735,11 +745,10 @@ class image_window_t : public Q3MainWindow, public processor_t {
 			QString last_save_directory=settings.readEntry(
 									SETTINGS_PREFIX "last_save_directory");
 			QString fname;
+			const QString default_extension="bmp";
+
 			while (1) {
-				QString save_fname=image_fname;
-				save_fname.replace(QRegExp("^.*[\\\\/]"),"");
-				save_fname.replace(QRegExp("\\.[^.]*$"),"");
-				save_fname+=".bmp";
+				QString save_fname=get_image_save_basename(image_fname,default_extension);
 
 				if (!last_save_directory.isEmpty())
 					save_fname.prepend(last_save_directory + "/");
@@ -889,8 +898,7 @@ class image_window_t : public Q3MainWindow, public processor_t {
 
 	void ensure_fullres_loaded_image(void);
 
-	void start_fullres_processing(const QString fname,const uint do_resize,
-										const float unsharp_mask_radius)
+	void start_fullres_processing(const QString fname,const uint do_resize,const float unsharp_mask_radius)
 		{
 			ensure_fullres_loaded_image();
 
@@ -912,8 +920,7 @@ class image_window_t : public Q3MainWindow, public processor_t {
 				resize_size=output_dimensions[
 							crop_target_combobox->currentItem()].dimensions;
 
-			processor.set_fullres_processing_params(resize_size,
-														unsharp_mask_radius);
+			processor.set_fullres_processing_params(resize_size,unsharp_mask_radius);
 			processor.start_operation(interactive_image_processor_t::
 										FULLRES_PROCESSING,fname.latin1());
 			set_caption();
@@ -1484,9 +1491,13 @@ bool image_window_t::event(QEvent *e)
 	return true;
 	}
 
-class print_file_info_t : public QObject, public processor_t {
+class batch_process_images_t : public QObject, public processor_t {
     Q_OBJECT
 	QStringList fnames;
+	bool (batch_process_images_t::* const process_image_func)(const QString fname);
+		// Returns true if processing was synchronously finished, false if async processing continues
+	const bool load_fullres;
+	bool processing_image;
 
 	void load_next(void)
 		{
@@ -1495,7 +1506,7 @@ class print_file_info_t : public QObject, public processor_t {
 				return;
 				}
 
-			const QString error_text=start_loading_image(fnames.first(),0);
+			const QString error_text=start_loading_image(fnames.first(),(uint)load_fullres);
 			if (!error_text.isNull()) {
 				fprintf(stderr,"%s\n",error_text.latin1());
 				QApplication::exit(EXIT_FAILURE);
@@ -1512,27 +1523,60 @@ class print_file_info_t : public QObject, public processor_t {
 			while (processor.get_operation_results(operation_type,error_text))
 				;
 
+			if (processor.operation_pending_count || is_external_reader_process_running())
+				return true;
+
 			//!!! handle errors
 
-			if (!processor.operation_pending_count &&
-									!is_external_reader_process_running()) {
-				printf("File: %s\n%s",fnames.first().latin1(),
-										get_shooting_info_text().latin1());
-				fnames.remove(fnames.begin());
-
-				if (!fnames.isEmpty())
-					printf("\n");
-
-				load_next();
+			if (!processing_image) {
+				processing_image=!(this->*process_image_func)(fnames.first());
+				if (processing_image)
+					return true;
 				}
+			else
+				processing_image=false;
+
+			fnames.remove(fnames.begin());
+			load_next();
 
 			return true;
 			}
 
 	public:
-	print_file_info_t(const QStringList &_fnames) :
-									processor_t(this), fnames(_fnames)
+	batch_process_images_t(const QStringList &_fnames,const bool _load_fullres,
+						bool (batch_process_images_t::* const _process_image_func)(const QString fname)) :
+						processor_t(this), fnames(_fnames), process_image_func(_process_image_func),
+						load_fullres(_load_fullres), processing_image(false)
 		{ load_next(); }
+
+	bool print_loaded_file_info(const QString fname)
+		{
+			printf("File: %s\n%s",fname.latin1(),get_shooting_info_text().latin1());
+			return true;
+			}
+
+	bool save_image(const QString fname)
+		{
+			printf("Loaded file: %s\n",fname.latin1());
+
+			{ color_and_levels_processing_t::params_t params;
+			params.contrast=1.15f;	//!!!!
+			params.exposure_shift=+2.35f;	//!!!
+			params.black_level=pow(10.0f / 255,2.2);	//!!!
+			params.white_clipping_stops=0.0f;
+			params.color_coeffs[0]=1.0f;
+			params.color_coeffs[1]=1.0f;
+			params.color_coeffs[2]=1.0f;
+			params.convert_to_grayscale=0;
+			processor.set_color_and_levels_params(params); }
+
+			{ const vec<uint> resize_size={0,0};
+			processor.set_fullres_processing_params(resize_size,-1.0f/*!!!!*/); }
+
+			processor.start_operation(interactive_image_processor_t::FULLRES_PROCESSING,
+													get_image_save_basename(fname,"jpg" /*!!!*/).latin1());
+			return false;
+			}
 	};
 
 int main(sint argc,char **argv)
@@ -1540,7 +1584,8 @@ int main(sint argc,char **argv)
 	Magick::InitializeMagick(NULL);
 	QApplication app(argc,argv);
 
-	uint show_only_info=0;
+	bool show_only_info=false;
+	bool batch_save_images=false;
 	QStringList fnames;
 	for (uint i=1;i < (uint)app.argc();i++) {
 		if (app.argv()[i] == QString("-matrix")) {
@@ -1561,13 +1606,17 @@ int main(sint argc,char **argv)
 			}
 
 		if (app.argv()[i] == QString("-info"))
-			show_only_info=1;
+			show_only_info=true;
+		  else if (app.argv()[i] == QString("-save"))
+			batch_save_images=true;
 		  else
 			fnames.append(app.argv()[i]);
 		}
 
-	if (show_only_info && !fnames.isEmpty()) {
-		print_file_info_t print_file_info(fnames);
+	if ((show_only_info || batch_save_images) && !fnames.isEmpty()) {
+		batch_process_images_t batch_process_images(fnames,!show_only_info,
+									show_only_info ? &batch_process_images_t::print_loaded_file_info :
+													&batch_process_images_t::save_image);
 		return app.exec();
 		}
 
