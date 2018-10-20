@@ -448,6 +448,7 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 	vec3d<double> R_data=vec3d<double>::make(1,0,0);
 	vec3d<double> G_data=vec3d<double>::make(0,1,0);
 	vec3d<double> B_data=vec3d<double>::make(0,0,1);
+	vec3d<double> white_balance_mult=vec3d<double>::make(1,1,1);
 
 	if (!strcmp(shooting_info.camera_type,"Canon EOS D30")) {
 		// new matrix for dcraw 7.93 -m, but without normalising
@@ -475,6 +476,13 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 		*/
 		}
 
+	if (!strcmp(shooting_info.camera_type,"Canon EOS 77D")) {
+		R_data=vec3d<double>::make(1    ,0.380 ,0.157);
+		G_data=vec3d<double>::make(0.336,1     ,0.338);
+		B_data=vec3d<double>::make(0.085,0.482,   1  );
+		white_balance_mult=vec3d<double>::make(1,7.5,1.7);
+		}
+
 	R_nonlinear_scaling=1.0 / (1-R_nonlinear_transfer_coeff*R_nonlinear_mult);
 	B_nonlinear_scaling=1.0 / (1-B_nonlinear_transfer_coeff*B_nonlinear_mult);
 
@@ -489,9 +497,9 @@ void image_reader_t::load_postprocess(const char * const shooting_info_fname)
 						determinant3(R_data,G_data,vabaliige) / D,
 						};
 
-	m.x_vec=(R_data * normalize_mult[0]).tofloat();
-	m.y_vec=(G_data * normalize_mult[1]).tofloat();
-	m.z_vec=(B_data * normalize_mult[2]).tofloat();
+	m.x_vec=(R_data * normalize_mult[0] * white_balance_mult.x).tofloat();
+	m.y_vec=(G_data * normalize_mult[1] * white_balance_mult.y).tofloat();
+	m.z_vec=(B_data * normalize_mult[2] * white_balance_mult.z).tofloat();
 
 	m.inverse();
 
