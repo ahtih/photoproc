@@ -1561,7 +1561,7 @@ class batch_process_images_t : public QObject, public processor_t {
 
 			{ color_and_levels_processing_t::params_t params;
 			params.contrast=1.15f;	//!!!!
-			params.exposure_shift=+2.35f;	//!!!
+			params.exposure_shift=+2.63f;	//!!!
 			params.black_level=pow(10.0f / 255,2.2);	//!!!
 			params.white_clipping_stops=0.0f;
 			params.color_coeffs[0]=1.0f;
